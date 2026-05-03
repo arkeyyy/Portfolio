@@ -65,9 +65,9 @@ export default function Navbar() {
               aria-label="Toggle Dark Mode"
             >
               {isDarkMode ? (
-                <Sun className="h-5 w-5 text-accent" />
+                <Sun className="h-7 w-7 text-accent" />
               ) : (
-                <Moon className="h-5 w-5 text-gray-600" />
+                <Moon className="h-7 w-7 text-gray-600" />
               )}
             </button>
             

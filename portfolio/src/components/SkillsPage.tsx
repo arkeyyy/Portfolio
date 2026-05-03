@@ -87,7 +87,7 @@ export default function SkillsPage() {
 							<div className="flex-1 h-0.5 bg-[var(--skills)] rounded-full"></div>
 							
 							{/* The Title */}
-							<h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 tracking-tight whitespace-nowrap">
+							<h3 className="text-2xl font-semibold text-black dark:text-white tracking-tight whitespace-nowrap">
 								{category.title}
 							</h3>
 							
