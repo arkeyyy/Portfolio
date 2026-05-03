@@ -1,4 +1,5 @@
 
+
 export default function AboutPage() {
   const scrollToProjects = () => {
     const element = document.getElementById('projects');
@@ -17,18 +18,21 @@ export default function AboutPage() {
             Hi, I'm Aldrin.
           </h1>
           
-          <h2 className="text-2xl md:text-3xl text-[#00afff] font-semibold text-justify">
-            CS student building web apps, interpreters, and system tools.
+          <h2 className="text-2xl md:text-3xl text-[var(--about)] font-semibold text-justify">
+            A computer science student building interpreters, web apps, and everything in between...
           </h2>
           
           <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed max-w-2xl text-justify">
-            I'm a Computer Science student passionate about full-stack development and system-level programming. I'm currently focused on completing a software engineering capstone—building a Resource Management MIS for a local agricultural cooperative. When I'm not coding, I'm usually tweaking my Linux terminal environment or exploring new tech stacks.
+            I'm a 3rd year Computer Science student at Cebu Institute of Technology - University, with a track record of
+            building across different domains. From a full four-phase language interpreter, a public health
+            web app to real-time bus-tracking system. I enjoy solving problems that have a clear real-world impact,
+            and I'm comfortable working across the stack using C, C++, Java, JavaScript, TypeScript, and more.
           </p>
           
           <div className="flex flex-wrap gap-4 pt-4">
             <button 
               onClick={scrollToProjects}
-              className="bg-[#00afff] hover:bg-[#52c9ff]  text-white px-8 py-3 rounded-lg font-medium transition-colors duration-200 cursor-pointer flex items-center justify-center"
+              className="bg-[var(--about)] hover:bg-[#52c9ff]  text-white px-8 py-3 rounded-lg font-medium transition-colors duration-200 cursor-pointer flex items-center justify-center"
             >
               View Projects
             </button>
@@ -45,7 +49,7 @@ export default function AboutPage() {
 
         {/* Right Side: Image Placeholder */}
         <div className="order-1 lg:order-2 flex justify-center lg:justify-end">
-          <div className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-2xl overflow-hidden border-4 border-[#00afff]/20 bg-gray-200 dark:bg-zinc-900 shadow-xl">
+          <div className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-2xl overflow-hidden border-4 border-[var(--about)]/20 bg-gray-200 dark:bg-zinc-900 shadow-xl">
             {/* Replace the src with your actual image path later, e.g., '/profile.jpg' */}
             <img 
               src="https://via.placeholder.com/600x600/121212/0ea5e9?text=Aldrin" 

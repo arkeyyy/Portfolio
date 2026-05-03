@@ -116,6 +116,15 @@ code {
   --color-accent: #0ea5e9;
 }
 
+:root {
+  --about: #00afff;
+   --projects: #ffb700; /*#fbbf24 */
+  --skills: #34d399;
+  --certifications: #ff6f61;
+  --education: #a78bfa;
+  --contact: #f87171;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @layer base {
@@ -126,5 +135,26 @@ code {
   .dark body {
     /* Updated to your specific dark gray hex */
     @apply bg-[#121212] text-gray-100;
+  }
+}
+
+@layer utilities {
+  .text-about {
+    color: var(--about);
+  }
+  .text-projects {
+    color: var(--projects);
+  }
+  .text-skills {
+    color: var(--skills);
+  }
+  .text-certifications {
+    color: var(--certifications);
+  }
+  .text-education {
+    color: var(--education);
+  }
+  .text-contact {
+    color: var(--contact);
   }
 }
