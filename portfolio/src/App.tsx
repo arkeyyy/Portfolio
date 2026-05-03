@@ -1,5 +1,6 @@
 import './App.css'
 import AboutPage from './components/AboutPage';
+import ProjectsPage from './components/ProjectsPage';
 import Navbar from './components/Navbar';
 
 function App() {
@@ -12,10 +13,7 @@ function App() {
 
         <AboutPage/>
         
-
-        <section id="projects" className="min-h-screen flex items-center justify-center pt-16">
-          <h2 className="text-3xl text-gray-400">[Projects Section Placeholder]</h2>
-        </section>
+        <ProjectsPage/>
 
         <section id="skills" className="min-h-screen flex items-center justify-center pt-16">
           <h2 className="text-3xl text-gray-400">[Skills Section Placeholder]</h2>
