@@ -1,7 +1,8 @@
 import './App.css'
+import Navbar from './components/Navbar';
 import AboutPage from './components/AboutPage';
 import ProjectsPage from './components/ProjectsPage';
-import Navbar from './components/Navbar';
+import SkillsPage from './components/SkillsPage';
 
 function App() {
   return (
@@ -15,9 +16,7 @@ function App() {
         
         <ProjectsPage/>
 
-        <section id="skills" className="min-h-screen flex items-center justify-center pt-16">
-          <h2 className="text-3xl text-gray-400">[Skills Section Placeholder]</h2>
-        </section>
+        <SkillsPage/>
 
         <section id="certifications" className="min-h-screen flex items-center justify-center pt-16">
           <h2 className="text-3xl text-gray-400">[Certifications Section Placeholder]</h2>
