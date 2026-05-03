@@ -14,7 +14,15 @@ export default function Navbar() {
     }
   }, [isDarkMode]);
 
-  const navLinks = ['About', 'Projects', 'Skills', 'Certifications', 'Education', 'Contact'];
+  // Added the dark:hover variant so it overrides dark:text-white
+  const navItems = [
+    { name: 'About', hoverClass:           'hover:text-[var(--about)]           dark:hover:text-[var(--about)]' },
+    { name: 'Projects', hoverClass:        'hover:text-[var(--projects)]        dark:hover:text-[var(--projects)]' },
+    { name: 'Skills', hoverClass:          'hover:text-[var(--skills)]          dark:hover:text-[var(--skills)]' },
+    { name: 'Certifications', hoverClass:  'hover:text-[var(--certifications)]  dark:hover:text-[var(--certifications)]' },
+    { name: 'Education', hoverClass:       'hover:text-[var(--education)]       dark:hover:text-[var(--education)]' },
+    { name: 'Contact', hoverClass:         'hover:text-[var(--contact)]         dark:hover:text-[var(--contact)]' },
+  ];
 
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id.toLowerCase());
@@ -38,13 +46,14 @@ export default function Navbar() {
             
             {/* Desktop Nav Links */}
             <div className="hidden md:flex space-x-6">
-              {navLinks.map((link) => (
+              {navItems.map((item) => (
                 <button
-                  key={link}
-                  onClick={() => scrollToSection(link)}
-                  className="text-[18px] font-medium text-black dark:text-white hover:text-accent dark:hover:text-accent transition-colors cursor-pointer"
+                  key={item.name}
+                  onClick={() => scrollToSection(item.name)}
+                  // Removed the generic hover:text-accent and injected ${item.hoverClass}
+                  className={`text-[18px] font-medium text-black dark:text-white transition-colors cursor-pointer ${item.hoverClass}`}
                 >
-                  {link}
+                  {item.name}
                 </button>
               ))}
             </div>

@@ -116,14 +116,17 @@ code {
   --color-accent: #0ea5e9;
 }
 
-:root {
+@layer base{
+  :root {
   --about: #00afff;
-   --projects: #ffb700; /*#fbbf24 */
-  --skills: #34d399;
+  --projects: #ffb700; /*#fbbf24 */
+  --skills: #07ec98;
   --certifications: #ff6f61;
   --education: #a78bfa;
-  --contact: #f87171;
+  --contact: #d851d4;
+  }
 }
+
 
 @custom-variant dark (&:is(.dark *));
 
