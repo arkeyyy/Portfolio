@@ -28,7 +28,7 @@ export default function AnimatedBackground({ activeSection }: { activeSection: s
 
       {/* Orb 3: Bottom Left (Delayed) */}
       <div 
-        className="absolute bottom-[-20%] left-[10%] w-[50vw] h-[50vw] rounded-full blur-[120px] opacity-30 dark:opacity-20 animate-blob-slow animation-delay-4000"
+        className="absolute bottom-[-40%] left-[10%] w-[50vw] h-[50vw] rounded-full blur-[120px] opacity-30 dark:opacity-20 animate-blob-slow animation-delay-4000"
         style={{ backgroundColor: currentColor, transition: 'background-color 1s ease-in-out' }}
       ></div>
 
