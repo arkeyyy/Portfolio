@@ -71,7 +71,7 @@ export default function ProjectsPage() {
         <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
           Projects
         </h2>
-        <div className="w-20 h-1 bg-[var(--projects)] rounded-full"></div>   {/* line ubos sa Featured Projects */}
+        <div className="w-60 h-1 bg-[var(--projects)] rounded-full"></div>   {/* line ubos sa Featured Projects */}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

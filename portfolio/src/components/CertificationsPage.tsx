@@ -37,10 +37,9 @@ export default function CertificationsPage() {
         <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
           Certifications
         </h2>
-        <div className="w-20 h-1 bg-[var(--certifications)] rounded-full"></div>
+        <div className="w-60 h-1 bg-[var(--certifications)] rounded-full"></div>
       </div>
 
-      {/* Full width container with 2-column layout */}
       <div>
         
         {/* Flex parent container with wrapping enabled */}

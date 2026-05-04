@@ -119,11 +119,14 @@ code {
 @layer base{
   :root {
   --about: #00afff;
-  --projects: #ffb700; /*#fbbf24 */
+  --projects: #ffb700;
   --skills: #07ec98;
   --certifications: #ff6f61;
   --education: #a78bfa;
   --contact: #ff00fb;
+  --white: #ffffff;
+  --black: #000000;
+  --darkblue:#0A66C2;
   }
 }
 
@@ -159,5 +162,14 @@ code {
   }
   .text-contact {
     color: var(--contact);
+  }
+  .text-white {
+    color: var(--white);
+  }
+  .text-black {
+    color: var(--black);
+  }
+  .text-darkblue {
+    color: var(--darkblue);
   }
 }

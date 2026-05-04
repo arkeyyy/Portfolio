@@ -5,6 +5,7 @@ import ProjectsPage from './components/ProjectsPage';
 import SkillsPage from './components/SkillsPage';
 import CertificationsPage from './components/CertificationsPage';
 import EducationPage from './components/EducationPage';
+import ContactPage from './components/ContactPage';
 
 function App() {
   return (
@@ -24,9 +25,7 @@ function App() {
 
         <EducationPage />
 
-        <section id="contact" className="min-h-screen flex items-center justify-center pt-16">
-          <h2 className="text-3xl text-gray-400">[Contact Section Placeholder]</h2>
-        </section>
+        <ContactPage />
 
       </main>
     </div>

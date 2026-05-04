@@ -28,7 +28,7 @@ export default function EducationPage() {
           Education
         </h2>
 
-        <div className="w-20 h-1 bg-[var(--education)] rounded-full"></div>
+        <div className="w-60 h-1 bg-[var(--education)] rounded-full"></div>
       </div>
 
       <div className="max-w-full ">

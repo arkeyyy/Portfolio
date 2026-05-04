@@ -74,7 +74,7 @@ export default function SkillsPage() {
         <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
           Skills
         </h2>
-        <div className="w-20 h-1 bg-[var(--skills)] rounded-full"></div>
+        <div className="w-60 h-1 bg-[var(--skills)] rounded-full"></div>
       </div>
 
       <div className="space-y-16">
