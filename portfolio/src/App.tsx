@@ -6,6 +6,7 @@ import SkillsPage from './components/SkillsPage';
 import CertificationsPage from './components/CertificationsPage';
 import EducationPage from './components/EducationPage';
 import ContactPage from './components/ContactPage';
+import Footer from './components/Footer';
 import AnimatedBackground from './components/AnimatedBackground';
 import { useState, useEffect } from 'react';
 
@@ -54,6 +55,8 @@ function App() {
           <EducationPage />
           <ContactPage />
         </main>
+
+        <Footer />
       </div>
 
     </div>

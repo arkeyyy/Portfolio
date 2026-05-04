@@ -21,10 +21,10 @@ export default function AnimatedBackground({ activeSection }: { activeSection: s
       ></div>
 
       {/* Orb 2: Top Right (Delayed) */}
-      <div 
+      {/* <div 
         className="absolute top-[20%] right-[-10%] w-[35vw] h-[35vw] rounded-full blur-[100px] opacity-30 dark:opacity-20 animate-blob-medium animation-delay-2000"
         style={{ backgroundColor: currentColor, transition: 'background-color 1s ease-in-out' }}
-      ></div>
+      ></div> */}
 
       {/* Orb 3: Bottom Left (Delayed) */}
       <div 
@@ -34,7 +34,7 @@ export default function AnimatedBackground({ activeSection }: { activeSection: s
 
       {/* Orb 4: Bottom Right (Delayed) */}
       <div 
-        className="absolute bottom-[-10%] right-[-10%] w-[45vw] h-[45vw] rounded-full blur-[100px] opacity-30 dark:opacity-20 animate-blob animation-delay-6000"
+        className="absolute bottom-[-10%] right-[-10%] w-[45vw] h-[45vw] rounded-full blur-[100px] opacity-30 dark:opacity-20 animate-blob-fast animation-delay-2000"
         style={{ backgroundColor: currentColor, transition: 'background-color 1s ease-in-out' }}
       ></div>
     </div>
