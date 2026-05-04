@@ -53,10 +53,11 @@ export default function ContactPage() {
           {/* Upper Part: Title & Description */}
           <div className="text-center max-w-2xl mx-auto mb-12">
             <h3 className="text-3xl font-bold mb-4 text-gray-900 dark:text-gray-100">
-              Let's Connect
+              Find Me Here
             </h3>
             <p className="text-lg text-gray-600 dark:text-gray-400 leading-relaxed">
-              I'm always open to discussing new projects, creative ideas, or opportunities to be a part of your visions. Feel free to reach out through any of the platforms below!
+              {/* I'm always open to discussing new projects, creative ideas, or opportunities to be a part of your visions. Feel free to reach out through any of the platforms below! */}
+							Have something in mind or just want to connect? <br></br> Either way, feel free to drop a message through any platform below.
             </p>
           </div>
 

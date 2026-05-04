@@ -1,4 +1,4 @@
-
+import pic from '../assets/pic.jpg';
 
 export default function AboutPage() {
   const scrollToProjects = () => {
@@ -49,10 +49,10 @@ export default function AboutPage() {
 
         {/* Right Side: Image Placeholder */}
         <div className="order-1 lg:order-2 flex justify-center lg:justify-end">
-          <div className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-2xl overflow-hidden border-4 border-[var(--about)]/20 bg-gray-200 dark:bg-zinc-900 shadow-xl">
+          <div className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-2xl overflow-hidden border-5 border-[var(--about)]/50 bg-gray-200 dark:bg-zinc-900 shadow-xl">
             {/* Replace the src with your actual image path later, e.g., '/profile.jpg' */}
             <img 
-              src="https://via.placeholder.com/600x600/121212/0ea5e9?text=Aldrin" 
+              src={pic} 
               alt="Aldrin" 
               className="object-cover w-full h-full"
             />

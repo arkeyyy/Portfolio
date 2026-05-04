@@ -1,9 +1,48 @@
-// src/components/Navbar.tsx
 import { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 export default function Navbar() {
+  const [activeSection, setActiveSection] = useState('about');
   const [isDarkMode, setIsDarkMode] = useState(true);
+
+  const sectionColors: Record<string, string> = {
+    about: 'var(--about)',
+    projects: 'var(--projects)',
+    skills: 'var(--skills)',
+    certifications: 'var(--certifications)',
+    education: 'var(--education)',
+    contact: 'var(--contact)'
+  };
+
+  useEffect(() => {
+    // This rootMargin creates an invisible trigger line at the exact center of the screen
+    const observerOptions = {
+      root: null,
+      rootMargin: '-50% 0px -50% 0px', 
+      threshold: 0
+    };
+
+    const observerCallback = (entries: IntersectionObserverEntry[]) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          // When a section hits the middle, update our state to its ID!
+          setActiveSection(entry.target.id);
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(observerCallback, observerOptions);
+
+    // Grab all your sections by their IDs and observe them
+    const sections = ['about', 'projects', 'skills', 'certifications', 'education', 'contact'];
+    sections.forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) observer.observe(element);
+    });
+
+    // Cleanup when the component unmounts
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -38,7 +77,10 @@ export default function Navbar() {
           
           {/* Logo / Brand (Left) */}
           <div className="flex-shrink-0 cursor-pointer text-xl font-bold tracking-tighter" onClick={() => scrollToSection('about')}>
-            Aldrin<span className="text-accent"> S.</span>
+            Aldrin
+            <span className="text-2xl font-bold transition-colors duration-500 ease-in-out"
+                  style={{ color: sectionColors[activeSection] || 'var(--about)' }}
+            > S.</span>
           </div>
 
           {/* Right Side Group: Nav Links + Theme Toggle */}
@@ -65,9 +107,13 @@ export default function Navbar() {
               aria-label="Toggle Dark Mode"
             >
               {isDarkMode ? (
-                <Sun className="h-7 w-7 text-accent" />
+                <Sun className="h-7 w-7 text-accent transition-colors duration-500 ease-in-out" 
+                     style={{ color: sectionColors[activeSection] || 'var(--about)' }}
+                />
               ) : (
-                <Moon className="h-7 w-7 text-gray-600" />
+                <Moon className="h-7 w-7 text-gray-600 transition-colors duration-500 ease-in-out"
+                      style={{ color: sectionColors[activeSection] || 'var(--about)' }}
+                />
               )}
             </button>
             
