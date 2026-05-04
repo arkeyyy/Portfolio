@@ -1,4 +1,3 @@
-// src/components/ContactPage.tsx
 import { Mail, Phone } from 'lucide-react';
 import { FaGithub, FaLinkedin } from 'react-icons/fa';
 
@@ -10,31 +9,31 @@ export default function ContactPage() {
       link: 'mailto:susealdrin15@gmail.com',
       icon: Mail,
       isExternal: false,
-      hover: 'var(--about)'
+      hoverClasses: 'group-hover:text-[var(--about)] dark:group-hover:text-[var(--about)]'
     },
     {
       name: 'Phone',
-      value: '+63 912 345 6789', // Replace with your actual number
-      link: 'tel:+639123456789',
+      value: '+63 945 380 6785',
+      link: 'tel:+639453806785',
       icon: Phone,
       isExternal: false,
-      hover: 'var(--skills)'
+      hoverClasses: 'group-hover:text-[var(--skills)] dark:group-hover:text-[var(--skills)]'
     },
     {
       name: 'GitHub',
-      value: 'github.com/yourusername', // Replace with your username
+      value: 'https://github.com/arkeyyy', // Replace with your username
       link: 'https://github.com/',
       icon: FaGithub,
       isExternal: true,
-      hover: 'var(--white)'
+      hoverClasses: 'group-hover:text-[var(--black)] dark:group-hover:text-[var(--white)]'
     },
     {
       name: 'LinkedIn',
-      value: 'linkedin.com/in/yourusername', // Replace with your username
+      value: 'https://www.linkedin.com/in/aldrin-suse-0015ayin/',
       link: 'https://linkedin.com/in/',
       icon: FaLinkedin,
       isExternal: true,
-      hover: 'var(--linkedin)'
+      hoverClasses: 'group-hover:text-[var(--darkblue)] dark:group-hover:text-[var(--darkblue)]'
     }
   ];
 
@@ -49,7 +48,7 @@ export default function ContactPage() {
 
       <div>
         {/* The Master Card */}
-        <div className="bg-gray-50 w-full dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-3xl p-8 md:p-12 shadow-sm">
+        <div className="bg-gray-50 w-full dark:bg-zinc-900 border-3 border-gray-200 dark:border-zinc-400 rounded-3xl p-8 md:p-12 shadow-sm">
           
           {/* Upper Part: Title & Description */}
           <div className="text-center max-w-2xl mx-auto mb-12">
@@ -69,15 +68,15 @@ export default function ContactPage() {
                 href={method.link}
                 target={method.isExternal ? "_blank" : "_self"}
                 rel={method.isExternal ? "noopener noreferrer" : ""}
-                className="group flex flex-col items-center p-6 bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 hover:border-[var(--contact)] dark:hover:border-[var(--contact)] hover:shadow-md transition-all duration-300 hover:-translate-y-1"
+                className="group flex flex-col items-center p-6 bg-white dark:bg-zinc-800 rounded-2xl border-3 border-gray-200 dark:border-zinc-700 hover:border-black dark:hover:border-white hover:shadow-md transition-all duration-300 hover:-translate-y-1"
               >
                 {/* Icon Bubble */}
-                <div className={`bg-gray-100 dark:bg-zinc-900 p-4 rounded-full text-gray-500 dark:text-gray-400 group-hover:text-[${method.hover}] dark:group-hover:text-[${method.hover}] transition-colors duration-200 mb-4`}>
-                  <method.icon className="w-7 h-7" />
+                <div className={`bg-gray-200 dark:bg-zinc-900 p-4 rounded-full text-gray-500 dark:text-gray-400 ${method.hoverClasses} transition-colors duration-200 mb-4`}>
+                <method.icon className="w-7 h-7" />
                 </div>
                 
                 {/* Text Content */}
-                <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 group-hover:text-[var(--contact)] dark:group-hover:text-[var(--contact)] transition-colors duration-200 mb-1">
+                <h4 className={`text-lg font-semibold text-gray-900 dark:text-gray-100 ${method.hoverClasses} transition-colors duration-200 mb-1`}>
                   {method.name}
                 </h4>
                 <span className="text-sm text-gray-500 dark:text-gray-400 text-center break-all">
