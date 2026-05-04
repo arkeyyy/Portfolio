@@ -174,3 +174,34 @@ code {
     color: var(--darkblue);
   }
 }
+
+/* for glow in BG effect */
+@layer utilities {
+  .animate-blob-fast {
+    animation: blob 7s infinite alternate;
+  }
+  /* Medium orb */
+  .animate-blob-medium {
+    animation: blob 12s infinite alternate;
+  }
+  /* Slow orb */
+  .animate-blob-slow {
+    animation: blob 18s infinite alternate;
+  }
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+  .animation-delay-6000 {
+    animation-delay: 6s;
+  }
+}
+
+@keyframes blob {
+  0% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(50px, -50px) scale(1.1); }
+  66% { transform: translate(-40px, 30px) scale(0.9); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}

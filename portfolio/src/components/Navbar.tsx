@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
-export default function Navbar() {
-  const [activeSection, setActiveSection] = useState('about');
+export default function Navbar({ activeSection }: { activeSection: string }) {
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   const sectionColors: Record<string, string> = {
@@ -13,36 +12,6 @@ export default function Navbar() {
     education: 'var(--education)',
     contact: 'var(--contact)'
   };
-
-  useEffect(() => {
-    // This rootMargin creates an invisible trigger line at the exact center of the screen
-    const observerOptions = {
-      root: null,
-      rootMargin: '-50% 0px -50% 0px', 
-      threshold: 0
-    };
-
-    const observerCallback = (entries: IntersectionObserverEntry[]) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          // When a section hits the middle, update our state to its ID!
-          setActiveSection(entry.target.id);
-        }
-      });
-    };
-
-    const observer = new IntersectionObserver(observerCallback, observerOptions);
-
-    // Grab all your sections by their IDs and observe them
-    const sections = ['about', 'projects', 'skills', 'certifications', 'education', 'contact'];
-    sections.forEach((id) => {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
-    });
-
-    // Cleanup when the component unmounts
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
