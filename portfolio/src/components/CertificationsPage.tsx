@@ -1,7 +1,6 @@
-import { Award } from 'lucide-react';
-import codechumLogo from '../assets/codechum-icon.png';
-import sololearnLogo from '../assets/sololearn-icon.png';
-import canvaLogo from '../assets/canva-icon.png';
+import codechumIcon from '../assets/codechum-icon.png';
+import sololearnIcon from '../assets/sololearn-icon.png';
+import canvaIcon from '../assets/canva-icon.png';
 
 
 export default function CertificationsPage() {
@@ -10,25 +9,25 @@ export default function CertificationsPage() {
       title: 'CodeChum C Programming Certification', 
       issuer: 'CodeChum', 
       year: '2024',
-      icon: codechumLogo
+      icon: codechumIcon
     },
     { 
       title: 'CITU – Java Object-Oriented Programming Certification Exam', 
       issuer: 'CodeChum', 
       year: '2025',
-      icon: codechumLogo
+      icon: codechumIcon
     },
     { 
       title: 'Sololearn Introduction to Python Course Certificate', 
       issuer: 'Sololearn', 
       year: '2025',
-      icon: sololearnLogo
+      icon: sololearnIcon
     },
     { 
       title: 'Canva Design School Certificate', 
       issuer: 'Canva', 
       year: '2024',
-      icon: canvaLogo
+      icon: canvaIcon
     },
   ];
 

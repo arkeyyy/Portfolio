@@ -69,7 +69,7 @@ export default function ProjectsPage() {
     <section id="projects" className="py-24">
       <div className="mb-12">
         <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-          Featured Projects
+          Projects
         </h2>
         <div className="w-20 h-1 bg-[var(--projects)] rounded-full"></div>   {/* line ubos sa Featured Projects */}
       </div>
@@ -78,7 +78,7 @@ export default function ProjectsPage() {
         {projects.map((project) => (
           <div 
             key={project.id} 
-            className={`group relative flex flex-col justify-between p-6 rounded-2xl bg-gray-50 dark:bg-[#1f1f21] border ${project.featured ? 'border-[var(--projects)]/50 dark:border-[var(--projects)]/50 border-2' : 'border-gray-200 dark:border-zinc-800'} hover:border-[var(--projects)] dark:hover:border-[var(--projects)] transition-colors duration-300`}
+            className={`group relative flex flex-col justify-between p-6 rounded-2xl bg-gray-50 dark:bg-[#1f1f21] border-2 ${project.featured ? 'border-[var(--projects)]/50 dark:border-[var(--projects)]/50 border-2' : 'border-gray-200 dark:border-zinc-800'} hover:border-[var(--projects)] dark:hover:border-[var(--projects)] transition-colors duration-300`}
           >
             <div>
               <div className="flex justify-between items-start mb-4">

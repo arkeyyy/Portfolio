@@ -1,13 +1,16 @@
-import { GraduationCap } from 'lucide-react';
+import cituIcon from '../assets/cit-u-icon.png';
+import { FaFacebook, FaGlobe } from 'react-icons/fa';
 
 export default function EducationPage() {
   const education = [
     {
       degree: 'Bachelor of Science in Computer Science',
-      school: '[University Name Placeholder]',
-      year: '2023 - 2027',
-      description: 'Focus on full-stack development, system-level programming, and interpreters. Capstone: Developed a Resource Management MIS for an agricultural cooperative.',
-      icon: GraduationCap
+      school: 'Cebu Institute of Technology - University',
+      year: '2023 - 2027 (Currently Ongoing)',
+      description: 'Built a strong foundation across core areas of computer science, including programming, data structures, algorithms, databases, and software development, with applied projects in full-stack and system-level programming.',
+      icon: cituIcon,
+			facebook: 'https://www.facebook.com/CITUniversity',
+			website: 'https://cit.edu'
     },
     // {
     //   degree: '[Previous Degree or High School]',
@@ -24,22 +27,22 @@ export default function EducationPage() {
         <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
           Education
         </h2>
-        {/* The accent line using your purple education variable */}
+
         <div className="w-20 h-1 bg-[var(--education)] rounded-full"></div>
       </div>
 
-      <div className="max-w-4xl">
+      <div className="max-w-full ">
         <div className="space-y-6">
           {education.map((item, index) => (
             <div 
               key={index}
-              className="group flex flex-col md:flex-row gap-6 p-6 rounded-2xl bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 hover:border-[var(--education)] dark:hover:border-[var(--education)] transition-all duration-300"
+              className="group flex flex-col md:flex-row w-full gap-6 p-6 rounded-2xl bg-gray-50 dark:bg-zinc-900 border-5 border-gray-200 dark:border-zinc-800 hover:border-[var(--education)] dark:hover:border-[var(--education)] transition-all duration-300"
             >
               {/* Icon Wrapper */}
               <div className="flex-shrink-0">
                 {/* Added a slight rotate (-rotate-3) on hover for a nice dynamic feel */}
-                <div className="bg-gray-200 dark:bg-zinc-800 p-4 rounded-xl text-gray-500 dark:text-gray-400 group-hover:text-[var(--education)] dark:group-hover:text-[var(--education)] group-hover:scale-110 group-hover:-rotate-3 transition-all duration-300">
-                  <item.icon className="w-8 h-8" />
+                <div className="bg-gray-200 dark:bg-zinc-800 border-2 border-gray-300 dark:border-zinc-700 p-4 rounded-xl text-gray-500 dark:text-gray-400 group-hover:text-[var(--education)] dark:group-hover:text-[var(--education)] group-hover:scale-110 transition-all duration-300">
+                  <img src={item.icon} alt={`${item.school} logo`} className="w-14 h-14" />
                 </div>
               </div>
               
@@ -51,7 +54,7 @@ export default function EducationPage() {
                   </h3>
                   
                   {/* Year Badge */}
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 group-hover:text-[var(--education)] dark:group-hover:text-[var(--education)] transition-colors duration-200 whitespace-nowrap">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 transition-colors duration-200 whitespace-nowrap">
                     {item.year}
                   </span>
                 </div>
@@ -63,6 +66,31 @@ export default function EducationPage() {
                 <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
                   {item.description}
                 </p>
+
+								<div className='flex justify-end w-full ml-auto mt-4 gap-4'>
+									{item.facebook && (
+										<a 
+											href={item.facebook}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="text-gray-500 dark:text-gray-400 hover:text-[#0866FF] dark:hover:text-[#0866FF] transition-colors duration-200 mt-4 inline-flex items-center"
+										>
+											<FaFacebook className="w-6 h-6" />
+										</a>
+									)}
+
+									{item.website && (
+										<a 
+											href={item.website}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="text-gray-500 dark:text-gray-400 hover:text-[#000000] dark:hover:text-[#FFFFFF] transition-colors duration-200 mt-4 inline-flex items-center"
+										>
+											<FaGlobe className="w-6 h-6" />
+										</a>
+									)}
+								</div>
+
               </div>
             </div>
           ))}
