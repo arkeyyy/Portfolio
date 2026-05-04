@@ -1,4 +1,3 @@
-// src/components/SkillsPage.tsx
 import { 
   SiC, SiCplusplus, SiKotlin, SiPython, SiPerl, 
   SiHtml5, SiCss, SiJavascript, SiReact, SiNodedotjs, SiDjango, 

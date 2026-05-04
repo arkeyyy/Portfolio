@@ -1,4 +1,3 @@
-// src/components/ProjectsPage.tsx
 import { Code, ExternalLink } from 'lucide-react';
 
 const tagColors: Record<string, string> = {

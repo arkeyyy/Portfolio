@@ -1,27 +1,34 @@
-// src/components/CertificationsPage.tsx
 import { Award } from 'lucide-react';
+import codechumLogo from '../assets/codechum-icon.png';
+import sololearnLogo from '../assets/sololearn-icon.png';
+import canvaLogo from '../assets/canva-icon.png';
+
 
 export default function CertificationsPage() {
   const certifications = [
     { 
       title: 'CodeChum C Programming Certification', 
       issuer: 'CodeChum', 
-      year: '2024' 
+      year: '2024',
+      icon: codechumLogo
     },
     { 
       title: 'CITU – Java Object-Oriented Programming Certification Exam', 
       issuer: 'CodeChum', 
-      year: '2025' 
+      year: '2025',
+      icon: codechumLogo
     },
     { 
       title: 'Sololearn Introduction to Python Course Certificate', 
       issuer: 'Sololearn', 
-      year: '2025' 
+      year: '2025',
+      icon: sololearnLogo
     },
     { 
       title: 'Canva Design School Certificate', 
       issuer: 'Canva', 
-      year: '2024' 
+      year: '2024',
+      icon: canvaLogo
     },
   ];
 
@@ -46,7 +53,7 @@ export default function CertificationsPage() {
               
               <div className="group flex items-start space-x-4 p-4 rounded-xl border-2 hover:border-[var(--certifications)] bg-white hover:bg-[#ededed] dark:bg-zinc-800 dark:hover:bg-zinc-900 transition-colors duration-200 h-full">
                 <div className="mt-1 flex-shrink-0 bg-gray-200 dark:bg-zinc-700 p-2 rounded-full text-gray-500 dark:text-gray-400 dark:group-hover:text-[var(--certifications)] group-hover:text-[var(--certifications)] group-hover:scale-110 group-hover:bg-gray-300 dark:group-hover:bg-zinc-600 transition-all duration-300">
-                  <Award className="w-5 h-5" />
+                  <img src={cert.icon} alt={`${cert.issuer} logo`} className="w-6 h-6" />
                 </div>
                 
                 <div>
