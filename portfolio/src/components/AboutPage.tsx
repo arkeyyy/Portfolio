@@ -32,7 +32,7 @@ export default function AboutPage() {
           <div className="flex flex-wrap gap-4 pt-4">
             <button 
               onClick={scrollToProjects}
-              className="bg-[var(--about)] hover:bg-[#52c9ff]  text-white px-8 py-3 rounded-lg font-medium transition-colors duration-200 cursor-pointer flex items-center justify-center"
+              className="bg-[var(--about)] hover:bg-[#52c9ff] border-2 border-black dark:border-white text-white hover:text-black px-8 py-3 rounded-lg font-medium transition-colors duration-200 cursor-pointer flex items-center justify-center"
             >
               View Projects
             </button>
@@ -40,7 +40,7 @@ export default function AboutPage() {
             <a 
               href="/SUSE_Resume.pdf" 
               download
-              className="px-8 py-3 rounded-lg text-black dark:text-white font-medium border border-black dark:border-white hover:bg-gray-300 dark:hover:bg-zinc-800 transition-colors duration-200 flex items-center justify-center"
+              className="px-8 py-3 bg-transparent rounded-lg text-black dark:text-white font-medium border-2 border-black dark:border-white hover:bg-black/20 dark:hover:bg-white/20 transition-colors duration-200 flex items-center justify-center"
             >
               Download Resume
             </a>
