@@ -21,16 +21,16 @@ export default function ContactPage() {
     },
     {
       name: 'GitHub',
-      value: 'https://github.com/arkeyyy', // Replace with your username
-      link: 'https://github.com/',
+      value: 'arkeyyy', // Replace with your username
+      link: 'https://github.com/arkeyyy',
       icon: FaGithub,
       isExternal: true,
       hoverClasses: 'group-hover:text-[var(--black)] dark:group-hover:text-[var(--white)]'
     },
     {
       name: 'LinkedIn',
-      value: 'https://www.linkedin.com/in/aldrin-suse-0015ayin/',
-      link: 'https://linkedin.com/in/',
+      value: 'Aldrin Suse',
+      link: 'https://www.linkedin.com/in/arkeyy/',
       icon: FaLinkedin,
       isExternal: true,
       hoverClasses: 'group-hover:text-[var(--darkblue)] dark:group-hover:text-[var(--darkblue)]'
