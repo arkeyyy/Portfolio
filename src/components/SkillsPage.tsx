@@ -2,10 +2,11 @@ import {
   SiC, SiCplusplus, SiKotlin, SiPython, SiPerl, 
   SiHtml5, SiCss, SiJavascript, SiReact, SiNodedotjs, SiDjango, 
   SiSpringboot, SiTailwindcss, SiPostgresql, SiMongodb, SiSupabase, 
-  SiMysql, SiFigma, SiGithub, SiOpenai 
+  SiMysql, SiFigma, SiGithub
 } from 'react-icons/si';
 
 import { TbBrandCSharp } from "react-icons/tb";
+import { BsOpenai } from "react-icons/bs";
 
 import { 
   FaJava, FaRobot, FaDatabase, FaCubes, FaSitemap, FaCogs, FaNetworkWired 
@@ -52,7 +53,7 @@ export default function SkillsPage() {
         { name: 'MySQL', icon: SiMysql, hoverColor: 'group-hover:text-[#1c73ff]' },
         { name: 'Figma', icon: SiFigma, hoverColor: 'group-hover:text-[#F24E1E]' },
         { name: 'Git/GitHub', icon: SiGithub, hoverColor: 'group-hover:text-black dark:group-hover:text-white' },
-        { name: 'OpenAI API', icon: SiOpenai, hoverColor: 'group-hover:text-black dark:group-hover:text-white' },
+        { name: 'OpenAI API', icon: BsOpenai, hoverColor: 'group-hover:text-black dark:group-hover:text-white' },
         { name: 'Claude API', icon: FaRobot, hoverColor: 'group-hover:text-[#D97757]' }, // Anthropic peach/orange
       ]
     },
