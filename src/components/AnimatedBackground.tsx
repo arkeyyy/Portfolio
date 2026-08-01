@@ -214,6 +214,26 @@ function createCloudAlphaSprite() {
   }
   context.filter = 'none';
 
+  // Fade the procedural texture to zero before it reaches the bitmap edges.
+  // This prevents the softly blurred cloud from revealing its rectangular bounds.
+  context.globalCompositeOperation = 'destination-in';
+  const horizontalFade = context.createLinearGradient(0, 0, canvas.width, 0);
+  horizontalFade.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  horizontalFade.addColorStop(0.16, 'rgba(255, 255, 255, 1)');
+  horizontalFade.addColorStop(0.84, 'rgba(255, 255, 255, 1)');
+  horizontalFade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.fillStyle = horizontalFade;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const verticalFade = context.createLinearGradient(0, 0, 0, canvas.height);
+  verticalFade.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  verticalFade.addColorStop(0.18, 'rgba(255, 255, 255, 1)');
+  verticalFade.addColorStop(0.82, 'rgba(255, 255, 255, 1)');
+  verticalFade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.fillStyle = verticalFade;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.globalCompositeOperation = 'source-over';
+
   return canvas;
 }
 
