@@ -4,6 +4,7 @@ import {
   SiCss,
   SiDjango,
   SiFigma,
+  SiGit,
   SiGithub,
   SiHtml5,
   SiJavascript,
@@ -67,7 +68,8 @@ const skillCategories = [
     description: 'The supporting toolkit behind my design and development workflow.',
     skills: [
       { name: 'Figma', icon: SiFigma, color: 'text-[#F24E1E] dark:text-[#ff8060]' },
-      { name: 'Git & GitHub', icon: SiGithub, color: 'text-[var(--text-primary)]' },
+      { name: 'Git', icon: SiGit, color: 'text-[#F05032] dark:text-[#ff765c]' },
+      { name: 'GitHub', icon: SiGithub, color: 'text-[var(--text-primary)]' },
       { name: 'OpenAI API', icon: BsOpenai, color: 'text-[var(--text-primary)]' },
       { name: 'Claude API', icon: FaRobot, color: 'text-[#C15F3C] dark:text-[#D97757]' },
     ],
