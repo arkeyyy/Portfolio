@@ -380,9 +380,9 @@
 /* Hero */
 .hero-section {
   display: flex;
-  min-height: min(820px, calc(100dvh - 76px));
-  align-items: center;
-  padding-top: clamp(2.75rem, 5vw, 4.5rem);
+  min-height: auto;
+  align-items: flex-start;
+  padding-top: clamp(1.25rem, 2vw, 2rem);
 }
 
 .hero-layout {
@@ -1539,7 +1539,7 @@
   }
 
   .hero-section {
-    padding-top: 3rem;
+    padding-top: 1.25rem;
   }
 
   .hero-eyebrow {
