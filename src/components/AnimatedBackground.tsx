@@ -157,6 +157,33 @@ type Vortex = {
   stars: VortexStar[];
 };
 
+type RiftSprites = {
+  bodyAlpha: HTMLCanvasElement;
+  core: HTMLCanvasElement;
+  active: HTMLCanvasElement;
+  accent: HTMLCanvasElement;
+  cyanEdge: HTMLCanvasElement;
+  purpleEdge: HTMLCanvasElement;
+  activeContext: CanvasRenderingContext2D;
+  accentContext: CanvasRenderingContext2D;
+  lastActiveColor: string;
+  lastAccentColor: string;
+};
+
+type RiftFragment = {
+  offsetY: number;
+  phase: number;
+  speed: number;
+  size: number;
+  wave: number;
+  colorIndex: 0 | 1;
+};
+
+type SpaceRift = {
+  sprites: RiftSprites;
+  fragments: RiftFragment[];
+};
+
 type SecondaryRingSystem = OrbitGeometry & {
   lanes: number;
   laneSpacing: number;
@@ -204,6 +231,13 @@ type CosmicRenderTheme = {
     accentAlpha: number;
     coreAlpha: number;
     starAlpha: number;
+  };
+  rift: {
+    coreAlpha: number;
+    bodyAlpha: number;
+    accentAlpha: number;
+    edgeAlpha: number;
+    fragmentAlpha: number;
   };
   clouds: {
     accentAlpha: number;
@@ -261,6 +295,7 @@ type Scene = {
   aurora: AuroraSprites;
   quasar: Quasar;
   vortex: Vortex;
+  rift: SpaceRift;
 };
 
 const TAU = Math.PI * 2;
@@ -279,6 +314,8 @@ const FOREGROUND_CLOUD_PURPLE: Rgb = [148, 82, 255];
 const QUASAR_LIGHT_BLUE: Rgb = [112, 220, 255];
 const QUASAR_PURPLE: Rgb = [178, 104, 255];
 const VORTEX_STAR_WHITE: Rgb = [246, 249, 255];
+const RIFT_CYAN: Rgb = [92, 225, 255];
+const RIFT_PURPLE: Rgb = [194, 92, 255];
 const DEEP_SPACE: Rgb = [10, 14, 54];
 const DARK_STAR_NEUTRAL: Rgb = [225, 234, 255];
 const LIGHT_STAR_NEUTRAL: Rgb = [42, 53, 88];
@@ -299,6 +336,13 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     aurora: { activeAlpha: 0.76, purpleAlpha: 0.32 },
     quasar: { spriteAlpha: 0.82, lensAlpha: 0.48, particleAlpha: 0.76 },
     vortex: { activeAlpha: 0.56, accentAlpha: 0.34, coreAlpha: 0.065, starAlpha: 0.88 },
+    rift: {
+      coreAlpha: 0.56,
+      bodyAlpha: 0.34,
+      accentAlpha: 0.22,
+      edgeAlpha: 0.58,
+      fragmentAlpha: 0.66,
+    },
     clouds: {
       accentAlpha: 0.4,
       activeAlpha: 0.7,
@@ -349,6 +393,13 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     aurora: { activeAlpha: 0.38, purpleAlpha: 0.16 },
     quasar: { spriteAlpha: 0.5, lensAlpha: 0.28, particleAlpha: 0.46 },
     vortex: { activeAlpha: 0.26, accentAlpha: 0.17, coreAlpha: 0.028, starAlpha: 0.58 },
+    rift: {
+      coreAlpha: 0.16,
+      bodyAlpha: 0.16,
+      accentAlpha: 0.1,
+      edgeAlpha: 0.3,
+      fragmentAlpha: 0.38,
+    },
     clouds: {
       accentAlpha: 0.15,
       activeAlpha: 0.26,
@@ -764,6 +815,228 @@ function createAuroraAlphaSprite() {
   return canvas;
 }
 
+function createRiftPaths(width: number, height: number) {
+  const point = { x: width * 0.51, y: height * 0.96 };
+  const leftControlOne = { x: width * 0.48, y: height * 0.73 };
+  const leftControlTwo = { x: width * 0.3, y: height * 0.38 };
+  const leftTop = { x: width * 0.055, y: -height * 0.04 };
+  const rightControlOne = { x: width * 0.56, y: height * 0.7 };
+  const rightControlTwo = { x: width * 0.72, y: height * 0.35 };
+  const rightTop = { x: width * 0.95, y: -height * 0.04 };
+
+  const left = new Path2D();
+  left.moveTo(point.x, point.y);
+  left.bezierCurveTo(
+    leftControlOne.x,
+    leftControlOne.y,
+    leftControlTwo.x,
+    leftControlTwo.y,
+    leftTop.x,
+    leftTop.y,
+  );
+
+  const right = new Path2D();
+  right.moveTo(point.x, point.y);
+  right.bezierCurveTo(
+    rightControlOne.x,
+    rightControlOne.y,
+    rightControlTwo.x,
+    rightControlTwo.y,
+    rightTop.x,
+    rightTop.y,
+  );
+
+  const core = new Path2D();
+  core.moveTo(point.x, point.y);
+  core.bezierCurveTo(
+    leftControlOne.x,
+    leftControlOne.y,
+    leftControlTwo.x,
+    leftControlTwo.y,
+    leftTop.x,
+    leftTop.y,
+  );
+  core.lineTo(rightTop.x, rightTop.y);
+  core.bezierCurveTo(
+    rightControlTwo.x,
+    rightControlTwo.y,
+    rightControlOne.x,
+    rightControlOne.y,
+    point.x,
+    point.y,
+  );
+  core.closePath();
+
+  return {
+    core,
+    left,
+    right,
+    point,
+    leftPoints: [point, leftControlOne, leftControlTwo, leftTop] as const,
+    rightPoints: [point, rightControlOne, rightControlTwo, rightTop] as const,
+  };
+}
+
+function getCubicPoint(
+  points: readonly [
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+  ],
+  progress: number,
+) {
+  const inverse = 1 - progress;
+  const inverseSquared = inverse * inverse;
+  const progressSquared = progress * progress;
+  return {
+    x: inverseSquared * inverse * points[0].x
+      + 3 * inverseSquared * progress * points[1].x
+      + 3 * inverse * progressSquared * points[2].x
+      + progressSquared * progress * points[3].x,
+    y: inverseSquared * inverse * points[0].y
+      + 3 * inverseSquared * progress * points[1].y
+      + 3 * inverse * progressSquared * points[2].y
+      + progressSquared * progress * points[3].y,
+  };
+}
+
+function createRiftAlphaLayers() {
+  const width = 420;
+  const height = 960;
+  const paths = createRiftPaths(width, height);
+  const core = document.createElement('canvas');
+  const body = document.createElement('canvas');
+  const edge = document.createElement('canvas');
+  for (const canvas of [core, body, edge]) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+
+  const coreContext = core.getContext('2d');
+  const bodyContext = body.getContext('2d');
+  const edgeContext = edge.getContext('2d');
+  if (!coreContext || !bodyContext || !edgeContext) return { core, body, edge };
+
+  const coreGradient = coreContext.createLinearGradient(0, 0, 0, height);
+  coreGradient.addColorStop(0, 'rgba(255, 255, 255, 0.46)');
+  coreGradient.addColorStop(0.24, 'rgba(255, 255, 255, 0.82)');
+  coreGradient.addColorStop(0.72, 'rgba(255, 255, 255, 0.74)');
+  coreGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  coreContext.fillStyle = coreGradient;
+  coreContext.fill(paths.core);
+
+  bodyContext.save();
+  bodyContext.clip(paths.core);
+  bodyContext.globalCompositeOperation = 'lighter';
+  const bodyWash = bodyContext.createLinearGradient(0, 0, 0, height);
+  bodyWash.addColorStop(0, 'rgba(255, 255, 255, 0.035)');
+  bodyWash.addColorStop(0.42, 'rgba(255, 255, 255, 0.13)');
+  bodyWash.addColorStop(0.82, 'rgba(255, 255, 255, 0.08)');
+  bodyWash.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  bodyContext.fillStyle = bodyWash;
+  bodyContext.fillRect(0, 0, width, height);
+
+  bodyContext.lineCap = 'round';
+  bodyContext.filter = 'blur(9px)';
+  for (let ribbon = 0; ribbon < 11; ribbon += 1) {
+    const seed = 11_200 + ribbon * 37.9;
+    const endX = width * (0.08 + seededRandom(seed + 1.7) * 0.84);
+    const gradient = bodyContext.createLinearGradient(0, -height * 0.04, 0, height * 0.96);
+    const alpha = 0.045 + seededRandom(seed + 3.9) * 0.065;
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.35})`);
+    gradient.addColorStop(0.48, `rgba(255, 255, 255, ${alpha})`);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    bodyContext.strokeStyle = gradient;
+    bodyContext.lineWidth = 18 + seededRandom(seed + 6.3) * 34;
+    bodyContext.beginPath();
+    bodyContext.moveTo(paths.point.x + (seededRandom(seed + 8.7) - 0.5) * 9, paths.point.y);
+    bodyContext.bezierCurveTo(
+      width * (0.44 + seededRandom(seed + 10.1) * 0.14),
+      height * 0.72,
+      width * (0.16 + seededRandom(seed + 12.7) * 0.68),
+      height * 0.33,
+      endX,
+      -height * 0.05,
+    );
+    bodyContext.stroke();
+  }
+
+  bodyContext.filter = 'blur(1.4px)';
+  for (let stream = 0; stream < 24; stream += 1) {
+    const seed = 12_400 + stream * 41.7;
+    const endX = width * (0.07 + seededRandom(seed + 1.3) * 0.86);
+    const gradient = bodyContext.createLinearGradient(0, -height * 0.04, 0, height * 0.96);
+    const alpha = 0.075 + seededRandom(seed + 3.7) * 0.12;
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.42})`);
+    gradient.addColorStop(0.55, `rgba(255, 255, 255, ${alpha})`);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    bodyContext.strokeStyle = gradient;
+    bodyContext.lineWidth = 0.8 + seededRandom(seed + 5.9) * 4.2;
+    bodyContext.beginPath();
+    bodyContext.moveTo(paths.point.x + (seededRandom(seed + 8.1) - 0.5) * 7, paths.point.y);
+    bodyContext.bezierCurveTo(
+      width * (0.45 + seededRandom(seed + 10.3) * 0.1),
+      height * 0.69,
+      width * (0.12 + seededRandom(seed + 12.9) * 0.76),
+      height * 0.29,
+      endX,
+      -height * 0.05,
+    );
+    bodyContext.stroke();
+  }
+  bodyContext.restore();
+
+  edgeContext.globalCompositeOperation = 'lighter';
+  edgeContext.lineCap = 'round';
+  edgeContext.filter = 'blur(13px)';
+  edgeContext.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+  edgeContext.lineWidth = 24;
+  edgeContext.stroke(paths.left);
+  edgeContext.stroke(paths.right);
+  edgeContext.filter = 'blur(3.5px)';
+  edgeContext.strokeStyle = 'rgba(255, 255, 255, 0.52)';
+  edgeContext.lineWidth = 7;
+  edgeContext.stroke(paths.left);
+  edgeContext.stroke(paths.right);
+  edgeContext.filter = 'blur(0.7px)';
+  edgeContext.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+  edgeContext.lineWidth = 2.1;
+  edgeContext.stroke(paths.left);
+  edgeContext.stroke(paths.right);
+  edgeContext.setLineDash([48, 7, 13, 5]);
+  edgeContext.lineDashOffset = 19;
+  edgeContext.strokeStyle = 'rgba(255, 255, 255, 0.64)';
+  edgeContext.lineWidth = 3.4;
+  edgeContext.stroke(paths.left);
+  edgeContext.lineDashOffset = -31;
+  edgeContext.stroke(paths.right);
+  edgeContext.setLineDash([]);
+
+  for (let shard = 0; shard < 18; shard += 1) {
+    const seed = 13_800 + shard * 53.1;
+    const progress = 0.08 + seededRandom(seed + 1.9) * 0.82;
+    const isLeft = shard % 2 === 0;
+    const pathPoints = isLeft ? paths.leftPoints : paths.rightPoints;
+    const anchor = getCubicPoint(pathPoints, progress);
+    const direction = isLeft ? -1 : 1;
+    const length = 7 + seededRandom(seed + 4.3) * 22;
+    edgeContext.strokeStyle = `rgba(255, 255, 255, ${0.18 + seededRandom(seed + 6.7) * 0.34})`;
+    edgeContext.lineWidth = 0.7 + seededRandom(seed + 8.9) * 1.5;
+    edgeContext.beginPath();
+    edgeContext.moveTo(anchor.x, anchor.y);
+    edgeContext.lineTo(
+      anchor.x + direction * length,
+      anchor.y - length * (0.25 + seededRandom(seed + 11.1) * 0.6),
+    );
+    edgeContext.stroke();
+  }
+  edgeContext.filter = 'none';
+  edgeContext.globalCompositeOperation = 'source-over';
+
+  return { core, body, edge };
+}
+
 function createVortexAlphaSprite() {
   const canvas = document.createElement('canvas');
   canvas.width = 768;
@@ -892,7 +1165,7 @@ function createQuasarSprite() {
 
   context.save();
   context.translate(center, center);
-  context.rotate(-0.14);
+  context.rotate(-0.02);
   context.globalCompositeOperation = 'lighter';
 
   const jetGradient = context.createLinearGradient(0, -142, 0, 142);
@@ -980,6 +1253,29 @@ function createTintCanvas(alphaCanvas: HTMLCanvasElement, color: Rgb) {
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.globalCompositeOperation = 'source-over';
   return { canvas, context };
+}
+
+function createRiftSprites(): RiftSprites | null {
+  const alphaLayers = createRiftAlphaLayers();
+  const coreTint = createTintCanvas(alphaLayers.core, DEEP_SPACE);
+  const activeTint = createTintCanvas(alphaLayers.body, DEFAULT_ACTIVE_COLOR);
+  const accentTint = createTintCanvas(alphaLayers.body, CLOUD_ACCENT);
+  const cyanEdgeTint = createTintCanvas(alphaLayers.edge, RIFT_CYAN);
+  const purpleEdgeTint = createTintCanvas(alphaLayers.edge, RIFT_PURPLE);
+  if (!activeTint.context || !accentTint.context) return null;
+
+  return {
+    bodyAlpha: alphaLayers.body,
+    core: coreTint.canvas,
+    active: activeTint.canvas,
+    accent: accentTint.canvas,
+    cyanEdge: cyanEdgeTint.canvas,
+    purpleEdge: purpleEdgeTint.canvas,
+    activeContext: activeTint.context,
+    accentContext: accentTint.context,
+    lastActiveColor: '',
+    lastAccentColor: '',
+  };
 }
 
 function createVortexSprites(): VortexSprites | null {
@@ -1102,6 +1398,23 @@ function updateVortexTints(vortex: VortexSprites, activeColor: Rgb, accentColor:
     vortex.alpha,
     accentColor,
     vortex.lastAccentColor,
+  );
+}
+
+function updateRiftTints(rift: RiftSprites, activeColor: Rgb, accentColor: Rgb) {
+  rift.lastActiveColor = updateCloudTint(
+    rift.active,
+    rift.activeContext,
+    rift.bodyAlpha,
+    activeColor,
+    rift.lastActiveColor,
+  );
+  rift.lastAccentColor = updateCloudTint(
+    rift.accent,
+    rift.accentContext,
+    rift.bodyAlpha,
+    accentColor,
+    rift.lastAccentColor,
   );
 }
 
@@ -1412,6 +1725,20 @@ function createVortexStars(count: number) {
   });
 }
 
+function createRiftFragments(count: number) {
+  return Array.from({ length: count }, (_, index): RiftFragment => {
+    const seed = 15_200 + index * 59.3;
+    return {
+      offsetY: 0.12 + seededRandom(seed + 1.7) * 0.7,
+      phase: seededRandom(seed + 3.9),
+      speed: 0.000018 + seededRandom(seed + 6.1) * 0.000016,
+      size: 0.7 + seededRandom(seed + 8.7) * 1.6,
+      wave: 5 + seededRandom(seed + 11.3) * 13,
+      colorIndex: index % 3 === 0 ? 1 : 0,
+    };
+  });
+}
+
 function createScene(
   width: number,
   height: number,
@@ -1419,6 +1746,7 @@ function createScene(
   aurora: AuroraSprites,
   quasarSprite: HTMLCanvasElement,
   vortexSprites: VortexSprites,
+  riftSprites: RiftSprites,
   pixelRatio: number,
 ): Scene {
   const compact = width < 720;
@@ -1541,6 +1869,10 @@ function createScene(
     sprites: vortexSprites,
     stars: createVortexStars(compact ? 24 : 46),
   };
+  const rift: SpaceRift = {
+    sprites: riftSprites,
+    fragments: createRiftFragments(compact ? 6 : 11),
+  };
   const secondaryRings: Scene['secondaryRings'] = {
     distant: {
       centerX: width * (compact ? 0.86 : 0.9),
@@ -1609,6 +1941,7 @@ function createScene(
     aurora,
     quasar,
     vortex,
+    rift,
   };
 }
 
@@ -1659,6 +1992,131 @@ function drawBackgroundWash(
   context.fillRect(0, 0, width, height);
 }
 
+function drawSpaceRift(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  activeColor: Rgb,
+  renderTheme: CosmicRenderTheme,
+  reducedMotion: boolean,
+) {
+  const accentColor = getNebulaAccentColor(activeColor);
+  updateRiftTints(
+    scene.rift.sprites,
+    mixRgb(activeColor, RIFT_CYAN, 0.22),
+    mixRgb(accentColor, RIFT_PURPLE, 0.2),
+  );
+  const motionTime = reducedMotion ? 0 : time;
+  const narrowRift = scene.width < 960;
+  const riftWidth = scene.compact
+    ? clamp(scene.width * 0.44, 145, 190)
+    : narrowRift
+      ? clamp(scene.width * 0.3, 190, 240)
+      : clamp(scene.width * 0.23, 260, 360);
+  const riftHeight = Math.min(
+    scene.height * (scene.compact ? 0.88 : narrowRift ? 0.94 : 0.98),
+    scene.compact ? 760 : narrowRift ? 840 : 920,
+  );
+  const centerX = scene.width * (scene.compact ? 1.08 : narrowRift ? 1.03 : 0.91);
+  const topY = -riftHeight * 0.045;
+  const rotation = scene.compact ? -0.012 : narrowRift ? 0.008 : 0.026;
+  const driftX = reducedMotion ? 0 : Math.sin(motionTime * 0.000029 + 0.7) * 4;
+  const driftY = reducedMotion ? 0 : Math.cos(motionTime * 0.000023 + 1.6) * 3;
+  const openScale = reducedMotion
+    ? 0.94
+    : 0.94 + Math.sin(motionTime * 0.00018 + 0.4) * 0.07;
+  const energyPulse = reducedMotion
+    ? 0.88
+    : 0.84 + Math.sin(motionTime * 0.00031 + 1.2) * 0.13;
+  const shear = reducedMotion ? 0 : Math.sin(motionTime * 0.000037 + 2.3) * 0.016;
+  const localX = -riftWidth * 0.5;
+
+  context.save();
+  context.translate(centerX + driftX, topY + driftY);
+  context.rotate(rotation);
+  context.transform(openScale, 0, shear, 1, 0, 0);
+  context.globalCompositeOperation = 'source-over';
+  context.globalAlpha = renderTheme.rift.coreAlpha;
+  context.drawImage(scene.rift.sprites.core, localX, 0, riftWidth, riftHeight);
+
+  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+  context.globalAlpha = renderTheme.rift.accentAlpha * energyPulse;
+  context.drawImage(
+    scene.rift.sprites.accent,
+    localX - riftWidth * 0.018,
+    -driftY * 0.8,
+    riftWidth * 1.036,
+    riftHeight,
+  );
+  context.globalAlpha = renderTheme.rift.bodyAlpha * energyPulse;
+  context.drawImage(
+    scene.rift.sprites.active,
+    localX + riftWidth * 0.012,
+    driftY * 0.65,
+    riftWidth * 0.976,
+    riftHeight,
+  );
+
+  context.globalAlpha = renderTheme.rift.edgeAlpha * energyPulse * 0.76;
+  context.drawImage(
+    scene.rift.sprites.purpleEdge,
+    localX + 2.4,
+    0,
+    riftWidth,
+    riftHeight,
+  );
+  context.globalAlpha = renderTheme.rift.edgeAlpha * energyPulse;
+  context.drawImage(
+    scene.rift.sprites.cyanEdge,
+    localX - 1.8,
+    0,
+    riftWidth,
+    riftHeight,
+  );
+  context.restore();
+
+  const cosRotation = Math.cos(rotation);
+  const sinRotation = Math.sin(rotation);
+  context.save();
+  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+  context.lineCap = 'round';
+  for (const fragment of scene.rift.fragments) {
+    const progress = (motionTime * fragment.speed + fragment.phase) % 1;
+    const previousProgress = Math.max(0, progress - 0.09);
+    const travel = smoothstep(progress);
+    const previousTravel = smoothstep(previousProgress);
+    const originLocalX = -riftWidth
+      * (0.08 + (1 - fragment.offsetY) * 0.28)
+      * openScale;
+    const originLocalY = fragment.offsetY * riftHeight;
+    const originX = centerX + driftX
+      + originLocalX * cosRotation
+      - originLocalY * sinRotation;
+    const originY = topY + driftY
+      + originLocalX * sinRotation
+      + originLocalY * cosRotation;
+    const travelDistance = riftWidth * (0.34 + fragment.offsetY * 0.24);
+    const wave = Math.sin(progress * TAU + fragment.phase * TAU) * fragment.wave;
+    const previousWave = Math.sin(previousProgress * TAU + fragment.phase * TAU)
+      * fragment.wave;
+    const x = snapToPixel(originX - travel * travelDistance, scene.pixelRatio);
+    const y = snapToPixel(originY + wave, scene.pixelRatio);
+    const previousX = originX - previousTravel * travelDistance;
+    const previousY = originY + previousWave;
+    const color = fragment.colorIndex === 0 ? RIFT_CYAN : RIFT_PURPLE;
+    const fade = Math.sin(progress * Math.PI);
+    const alpha = renderTheme.rift.fragmentAlpha * fade;
+    context.strokeStyle = rgba(color, alpha * 0.36);
+    context.lineWidth = Math.max(0.5, fragment.size * 0.48);
+    context.beginPath();
+    context.moveTo(previousX, previousY);
+    context.lineTo(x, y);
+    context.stroke();
+    drawStar(context, x, y, fragment.size, color, alpha * 0.86);
+  }
+  context.restore();
+}
+
 function drawQuasar(
   context: CanvasRenderingContext2D,
   scene: Scene,
@@ -1675,7 +2133,7 @@ function drawQuasar(
   const driftY = reducedMotion ? 0 : Math.cos(motionTime * 0.000026 + 1.1) * 1.8;
   const centerX = quasar.centerX + driftX;
   const centerY = quasar.centerY + driftY;
-  const rotation = -0.14;
+  const rotation = -0.02;
 
   context.save();
   context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
@@ -2666,6 +3124,10 @@ function drawScene(
   context.clearRect(0, 0, scene.width, scene.height);
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = 1;
+  context.save();
+  context.globalCompositeOperation = 'destination-over';
+  drawSpaceRift(context, scene, time, activeColor, renderTheme, reducedMotion);
+  context.restore();
   drawBackgroundWash(context, scene, activeColor, renderTheme);
   drawQuasar(context, scene, time, renderTheme, reducedMotion);
   drawSecondaryRingSystem(
@@ -2741,7 +3203,8 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     const auroraSprites = createAuroraSprites();
     const quasarSprite = createQuasarSprite();
     const vortexSprites = createVortexSprites();
-    if (!cloudSprites || !auroraSprites || !vortexSprites) return;
+    const riftSprites = createRiftSprites();
+    if (!cloudSprites || !auroraSprites || !vortexSprites || !riftSprites) return;
 
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const coarsePointer = window.matchMedia('(pointer: coarse)');
@@ -2803,6 +3266,7 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
         auroraSprites,
         quasarSprite,
         vortexSprites,
+        riftSprites,
         dpr,
       );
       paint(performance.now());
