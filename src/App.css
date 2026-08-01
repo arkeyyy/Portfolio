@@ -50,15 +50,80 @@
     linear-gradient(180deg, color-mix(in srgb, var(--page-bg) 94%, transparent), var(--page-bg));
 }
 
-.ambient-grid {
+.ambient-cosmos {
+  position: absolute;
+  inset: -4%;
+  mask-image: radial-gradient(ellipse at 50% 42%, black 20%, rgba(0, 0, 0, 0.84) 68%, transparent 100%);
+  animation: cosmic-field-drift 18s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.ambient-cosmos::after {
+  position: absolute;
+  inset: 12% -15%;
+  z-index: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 28%,
+    color-mix(in srgb, var(--active-color) 7%, transparent) 45%,
+    color-mix(in srgb, var(--active-color) 3%, transparent) 57%,
+    transparent 73%
+  );
+  filter: blur(32px);
+  transform: rotate(-8deg);
+  transition: background 650ms ease;
+  content: '';
+}
+
+.cosmic-stars {
   position: absolute;
   inset: 0;
-  opacity: 0.38;
-  background-image:
-    linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(to bottom, black, transparent 74%);
+  z-index: 1;
+  animation: cosmic-stars-drift 12s ease-in-out infinite alternate;
+}
+
+.cosmic-star {
+  --star-low-opacity: 0.32;
+  --star-high-opacity: 0.76;
+  position: absolute;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 8px 1px currentColor;
+  transition: color 1500ms ease-in-out;
+  animation: cosmic-star-pulse 4.8s ease-in-out infinite;
+}
+
+@keyframes cosmic-field-drift {
+  from {
+    transform: translate3d(-0.6%, -0.4%, 0) scale(1);
+  }
+
+  to {
+    transform: translate3d(0.8%, 0.7%, 0) scale(1.025);
+  }
+}
+
+@keyframes cosmic-stars-drift {
+  from {
+    transform: translate3d(-1.2%, 0.8%, 0);
+  }
+
+  to {
+    transform: translate3d(1.8%, -1.4%, 0);
+  }
+}
+
+@keyframes cosmic-star-pulse {
+  0%,
+  100% {
+    opacity: var(--star-low-opacity);
+    transform: scale(0.82);
+  }
+
+  50% {
+    opacity: var(--star-high-opacity);
+    transform: scale(1.22);
+  }
 }
 
 .ambient-orb {
@@ -170,8 +235,9 @@
   background-size: 7px 7px;
 }
 
-.dark .ambient-grid {
-  opacity: 0.2;
+.dark .cosmic-star {
+  --star-low-opacity: 0.46;
+  --star-high-opacity: 0.94;
 }
 
 .dark .ambient-orb-one {
@@ -1778,6 +1844,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ambient-cosmos,
+  .cosmic-stars,
+  .cosmic-star,
   .ambient-orb {
     animation: none;
     will-change: auto;
