@@ -101,10 +101,29 @@ type CloudSprites = {
   alpha: HTMLCanvasElement;
   active: HTMLCanvasElement;
   accent: HTMLCanvasElement;
+  purple: HTMLCanvasElement;
   activeContext: CanvasRenderingContext2D;
   accentContext: CanvasRenderingContext2D;
   lastActiveColor: string;
   lastAccentColor: string;
+};
+
+type AuroraSprites = {
+  alpha: HTMLCanvasElement;
+  active: HTMLCanvasElement;
+  purple: HTMLCanvasElement;
+  activeContext: CanvasRenderingContext2D;
+  lastActiveColor: string;
+};
+
+type SecondaryRingSystem = OrbitGeometry & {
+  lanes: number;
+  laneSpacing: number;
+  dashSpeed: number;
+  colorMix: number;
+  glintAngle: number;
+  glintSpeed: number;
+  particles: RingParticle[];
 };
 
 type CosmicRenderTheme = {
@@ -124,8 +143,24 @@ type CosmicRenderTheme = {
     laneFalloff: number;
     dashAlpha: number;
   };
+  secondaryRings: {
+    distantAlpha: number;
+    innerAlpha: number;
+    dashAlpha: number;
+    particleAlpha: number;
+  };
+  aurora: {
+    activeAlpha: number;
+    purpleAlpha: number;
+  };
   clouds: {
     accentAlpha: number;
+    activeAlpha: number;
+    glowCoreAlpha: number;
+    glowMidAlpha: number;
+  };
+  foregroundClouds: {
+    purpleAlpha: number;
     activeAlpha: number;
     glowCoreAlpha: number;
     glowMidAlpha: number;
@@ -166,7 +201,12 @@ type Scene = {
   ringParticles: RingParticle[];
   planets: Planet[];
   orbit: OrbitGeometry;
+  secondaryRings: {
+    distant: SecondaryRingSystem;
+    inner: SecondaryRingSystem;
+  };
   clouds: CloudSprites;
+  aurora: AuroraSprites;
 };
 
 const TAU = Math.PI * 2;
@@ -181,6 +221,7 @@ const PLANET_RARE_END_MS = 16_000;
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const CLOUD_ACCENT: Rgb = [72, 78, 255];
 const ABOUT_CLOUD_ACCENT: Rgb = [158, 88, 255];
+const FOREGROUND_CLOUD_PURPLE: Rgb = [148, 82, 255];
 const DEEP_SPACE: Rgb = [10, 14, 54];
 const DARK_STAR_NEUTRAL: Rgb = [225, 234, 255];
 const LIGHT_STAR_NEUTRAL: Rgb = [42, 53, 88];
@@ -192,11 +233,24 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     fieldStarAlpha: 0.34,
     starClusters: { baseAlpha: 0.86, highlightAlpha: 0.92 },
     ringTrails: { baseAlpha: 0.09, laneFalloff: 0.01, dashAlpha: 0.17 },
+    secondaryRings: {
+      distantAlpha: 0.1,
+      innerAlpha: 0.125,
+      dashAlpha: 0.18,
+      particleAlpha: 0.72,
+    },
+    aurora: { activeAlpha: 0.76, purpleAlpha: 0.32 },
     clouds: {
       accentAlpha: 0.4,
       activeAlpha: 0.7,
       glowCoreAlpha: 0.04,
       glowMidAlpha: 0.018,
+    },
+    foregroundClouds: {
+      purpleAlpha: 0.22,
+      activeAlpha: 0.1,
+      glowCoreAlpha: 0.045,
+      glowMidAlpha: 0.022,
     },
     ringParticleAlpha: 0.88,
     planetRing: { foregroundAlpha: 0.58, backgroundAlpha: 0.34 },
@@ -227,11 +281,24 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     fieldStarAlpha: 0.28,
     starClusters: { baseAlpha: 0.58, highlightAlpha: 0.72 },
     ringTrails: { baseAlpha: 0.07, laneFalloff: 0.007, dashAlpha: 0.115 },
+    secondaryRings: {
+      distantAlpha: 0.055,
+      innerAlpha: 0.072,
+      dashAlpha: 0.1,
+      particleAlpha: 0.46,
+    },
+    aurora: { activeAlpha: 0.38, purpleAlpha: 0.16 },
     clouds: {
       accentAlpha: 0.15,
       activeAlpha: 0.26,
       glowCoreAlpha: 0.026,
       glowMidAlpha: 0.012,
+    },
+    foregroundClouds: {
+      purpleAlpha: 0.105,
+      activeAlpha: 0.055,
+      glowCoreAlpha: 0.022,
+      glowMidAlpha: 0.011,
     },
     ringParticleAlpha: 0.56,
     planetRing: { foregroundAlpha: 0.42, backgroundAlpha: 0.25 },
@@ -538,6 +605,104 @@ function createCloudAlphaSprite() {
   return canvas;
 }
 
+function createAuroraAlphaSprite() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 960;
+  canvas.height = 340;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+
+  context.globalCompositeOperation = 'lighter';
+  context.filter = 'blur(9px)';
+  for (let ribbon = 0; ribbon < 14; ribbon += 1) {
+    const seed = ribbon * 19.7 + 310;
+    const position = (ribbon + 0.22 + seededRandom(seed) * 0.56) / 14;
+    const x = canvas.width * (0.04 + position * 0.91);
+    const orbitX = -0.48 + position * 1.4;
+    const ellipseHeight = Math.sqrt(Math.max(0, 1 - orbitX * orbitX));
+    const baseY = canvas.height * (0.54 + (1 - ellipseHeight) * 0.68);
+    const ribbonHeight = Math.min(
+      baseY - canvas.height * 0.04,
+      canvas.height * (0.24 + seededRandom(seed + 1.7) * 0.48),
+    );
+    const topY = baseY - ribbonHeight;
+    const halfWidth = 10 + seededRandom(seed + 3.1) * 27;
+    const wave = (seededRandom(seed + 5.3) - 0.5) * halfWidth * 1.4;
+    const coreAlpha = 0.055 + seededRandom(seed + 7.1) * 0.075;
+    const gradient = context.createLinearGradient(0, topY, 0, baseY);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    gradient.addColorStop(0.28, `rgba(255, 255, 255, ${coreAlpha * 0.35})`);
+    gradient.addColorStop(0.7, `rgba(255, 255, 255, ${coreAlpha})`);
+    gradient.addColorStop(1, `rgba(255, 255, 255, ${coreAlpha * 0.16})`);
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.moveTo(x - halfWidth * 0.42, baseY);
+    context.bezierCurveTo(
+      x - halfWidth,
+      topY + ribbonHeight * 0.68,
+      x - halfWidth * 0.2 + wave,
+      topY + ribbonHeight * 0.22,
+      x + wave * 0.45,
+      topY,
+    );
+    context.bezierCurveTo(
+      x + halfWidth * 0.22 + wave,
+      topY + ribbonHeight * 0.3,
+      x + halfWidth,
+      topY + ribbonHeight * 0.7,
+      x + halfWidth * 0.42,
+      baseY,
+    );
+    context.closePath();
+    context.fill();
+  }
+
+  context.filter = 'blur(1.5px)';
+  for (let ray = 0; ray < 30; ray += 1) {
+    const seed = ray * 23.9 + 780;
+    const position = (ray + seededRandom(seed)) / 30;
+    const x = canvas.width * (0.045 + position * 0.9);
+    const orbitX = -0.48 + position * 1.4;
+    const ellipseHeight = Math.sqrt(Math.max(0, 1 - orbitX * orbitX));
+    const baseY = canvas.height * (0.54 + (1 - ellipseHeight) * 0.68);
+    const rayHeight = Math.min(
+      baseY - canvas.height * 0.04,
+      canvas.height * (0.16 + seededRandom(seed + 2.3) * 0.5),
+    );
+    const topY = baseY - rayHeight;
+    const rayWidth = 0.8 + seededRandom(seed + 4.7) * 2.2;
+    const rayAlpha = 0.045 + seededRandom(seed + 6.1) * 0.085;
+    const gradient = context.createLinearGradient(0, topY, 0, baseY);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    gradient.addColorStop(0.36, `rgba(255, 255, 255, ${rayAlpha * 0.45})`);
+    gradient.addColorStop(0.78, `rgba(255, 255, 255, ${rayAlpha})`);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    context.fillStyle = gradient;
+    context.fillRect(x - rayWidth * 0.5, topY, rayWidth, rayHeight);
+  }
+  context.filter = 'none';
+
+  context.globalCompositeOperation = 'destination-in';
+  const horizontalFade = context.createLinearGradient(0, 0, canvas.width, 0);
+  horizontalFade.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  horizontalFade.addColorStop(0.08, 'rgba(255, 255, 255, 1)');
+  horizontalFade.addColorStop(0.9, 'rgba(255, 255, 255, 1)');
+  horizontalFade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.fillStyle = horizontalFade;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const verticalFade = context.createLinearGradient(0, 0, 0, canvas.height);
+  verticalFade.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  verticalFade.addColorStop(0.12, 'rgba(255, 255, 255, 1)');
+  verticalFade.addColorStop(0.9, 'rgba(255, 255, 255, 1)');
+  verticalFade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.fillStyle = verticalFade;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.globalCompositeOperation = 'source-over';
+
+  return canvas;
+}
+
 function createTintCanvas(alphaCanvas: HTMLCanvasElement, color: Rgb) {
   const canvas = document.createElement('canvas');
   canvas.width = alphaCanvas.width;
@@ -553,16 +718,33 @@ function createTintCanvas(alphaCanvas: HTMLCanvasElement, color: Rgb) {
   return { canvas, context };
 }
 
+function createAuroraSprites(): AuroraSprites | null {
+  const alpha = createAuroraAlphaSprite();
+  const activeTint = createTintCanvas(alpha, DEFAULT_ACTIVE_COLOR);
+  const purpleTint = createTintCanvas(alpha, FOREGROUND_CLOUD_PURPLE);
+  if (!activeTint.context || !purpleTint.context) return null;
+
+  return {
+    alpha,
+    active: activeTint.canvas,
+    purple: purpleTint.canvas,
+    activeContext: activeTint.context,
+    lastActiveColor: '',
+  };
+}
+
 function createCloudSprites(): CloudSprites | null {
   const alpha = createCloudAlphaSprite();
   const activeTint = createTintCanvas(alpha, DEFAULT_ACTIVE_COLOR);
   const accentTint = createTintCanvas(alpha, CLOUD_ACCENT);
-  if (!activeTint.context || !accentTint.context) return null;
+  const purpleTint = createTintCanvas(alpha, FOREGROUND_CLOUD_PURPLE);
+  if (!activeTint.context || !accentTint.context || !purpleTint.context) return null;
 
   return {
     alpha,
     active: activeTint.canvas,
     accent: accentTint.canvas,
+    purple: purpleTint.canvas,
     activeContext: activeTint.context,
     accentContext: accentTint.context,
     lastActiveColor: '',
@@ -612,6 +794,16 @@ function updateAccentCloudTint(clouds: CloudSprites, color: Rgb) {
     clouds.alpha,
     color,
     clouds.lastAccentColor,
+  );
+}
+
+function updateAuroraTint(aurora: AuroraSprites, color: Rgb) {
+  aurora.lastActiveColor = updateCloudTint(
+    aurora.active,
+    aurora.activeContext,
+    aurora.alpha,
+    color,
+    aurora.lastActiveColor,
   );
 }
 
@@ -870,10 +1062,35 @@ function createStarClusters(
   });
 }
 
+function createSecondaryRingParticles(
+  count: number,
+  lanes: number,
+  seedOffset: number,
+  direction: 1 | -1,
+  speedMin: number,
+  speedRange: number,
+  sizeMin: number,
+  sizeRange: number,
+) {
+  return Array.from({ length: count }, (_, index): RingParticle => {
+    const seed = seedOffset + index * 29.3;
+    return {
+      angle: seededRandom(seed + 1.1) * TAU,
+      size: sizeMin + seededRandom(seed + 3.7) * sizeRange,
+      lane: Math.floor(seededRandom(seed + 5.9) * lanes),
+      speed: direction * (speedMin + seededRandom(seed + 7.3) * speedRange),
+      phase: seededRandom(seed + 9.7) * TAU,
+      colorSeed: seed * 0.37,
+      colorOffset: seededRandom(seed + 11.9) * STAR_COLOR_FADE_MS,
+    };
+  });
+}
+
 function createScene(
   width: number,
   height: number,
   clouds: CloudSprites,
+  aurora: AuroraSprites,
   pixelRatio: number,
 ): Scene {
   const compact = width < 720;
@@ -982,6 +1199,58 @@ function createScene(
         radiusY: Math.max(height * 0.35, 210),
         tilt: 0.14,
       };
+  const secondaryRings: Scene['secondaryRings'] = {
+    distant: {
+      centerX: width * (compact ? 0.86 : 0.9),
+      centerY: height * (compact ? 0.16 : 0.13),
+      radiusX: compact
+        ? clamp(width * 0.27, 82, 126)
+        : clamp(width * 0.18, 190, 300),
+      radiusY: compact
+        ? clamp(height * 0.065, 42, 68)
+        : clamp(height * 0.085, 58, 102),
+      tilt: -0.24,
+      lanes: 2,
+      laneSpacing: 0.08,
+      dashSpeed: 0.0045,
+      colorMix: 0.74,
+      glintAngle: 5.2,
+      glintSpeed: -0.000018,
+      particles: createSecondaryRingParticles(
+        compact ? 14 : 24,
+        2,
+        2400,
+        1,
+        0.000022,
+        0.00001,
+        0.5,
+        1.2,
+      ),
+    },
+    inner: {
+      centerX: orbit.centerX,
+      centerY: orbit.centerY,
+      radiusX: orbit.radiusX * (compact ? 0.48 : 0.44),
+      radiusY: orbit.radiusY * (compact ? 0.52 : 0.48),
+      tilt: orbit.tilt - 0.045,
+      lanes: 3,
+      laneSpacing: 0.065,
+      dashSpeed: -0.008,
+      colorMix: 0.52,
+      glintAngle: 3.8,
+      glintSpeed: 0.000032,
+      particles: createSecondaryRingParticles(
+        compact ? 28 : 46,
+        3,
+        3600,
+        -1,
+        0.000028,
+        0.000014,
+        0.58,
+        1.55,
+      ),
+    },
+  };
   const starClusters = createStarClusters(width, height, compact, pixelRatio);
   return {
     width,
@@ -993,7 +1262,9 @@ function createScene(
     ringParticles,
     planets,
     orbit,
+    secondaryRings,
     clouds,
+    aurora,
   };
 }
 
@@ -1197,6 +1468,177 @@ function drawRingTrails(
   context.restore();
 }
 
+function drawSecondaryRingSystem(
+  context: CanvasRenderingContext2D,
+  ring: SecondaryRingSystem,
+  time: number,
+  activeColor: Rgb,
+  baseAlpha: number,
+  dashAlpha: number,
+  reducedMotion: boolean,
+) {
+  const motionTime = reducedMotion ? 0 : time;
+  const ringColor = mixRgb(activeColor, FOREGROUND_CLOUD_PURPLE, ring.colorMix);
+  const centerLane = (ring.lanes - 1) * 0.5;
+
+  context.save();
+  context.translate(ring.centerX, ring.centerY);
+  context.rotate(ring.tilt);
+  context.lineCap = 'round';
+
+  for (let lane = 0; lane < ring.lanes; lane += 1) {
+    const laneOffset = lane - centerLane;
+    const laneScale = 1 + laneOffset * ring.laneSpacing;
+    const laneAlpha = 1 - Math.abs(laneOffset) * 0.11;
+
+    context.setLineDash([]);
+    context.lineWidth = 0.55 + lane * 0.16;
+    context.strokeStyle = rgba(ringColor, baseAlpha * laneAlpha);
+    context.beginPath();
+    context.ellipse(
+      0,
+      0,
+      ring.radiusX * laneScale,
+      ring.radiusY * laneScale,
+      0,
+      0,
+      TAU,
+    );
+    context.stroke();
+
+    context.setLineDash([
+      ring.radiusX * 0.42,
+      ring.radiusX * 0.17,
+      ring.radiusX * 0.07,
+      ring.radiusX * 0.26,
+    ]);
+    context.lineDashOffset = -motionTime * ring.dashSpeed + lane * ring.radiusX * 0.13;
+    context.lineWidth = 0.9 + lane * 0.12;
+    context.strokeStyle = rgba(ringColor, dashAlpha * laneAlpha);
+    context.beginPath();
+    context.ellipse(
+      0,
+      0,
+      ring.radiusX * laneScale,
+      ring.radiusY * laneScale,
+      0,
+      0,
+      TAU,
+    );
+    context.stroke();
+  }
+
+  context.setLineDash([]);
+  const glintAngle = ring.glintAngle + motionTime * ring.glintSpeed;
+  const glintX = Math.cos(glintAngle) * ring.radiusX;
+  const glintY = Math.sin(glintAngle) * ring.radiusY;
+  const glintPulse = reducedMotion ? 0.72 : 0.64 + Math.sin(time * 0.0011 + ring.glintAngle) * 0.24;
+  drawStar(context, glintX, glintY, 1.25, ringColor, dashAlpha * 3.2 * glintPulse);
+  context.restore();
+}
+
+function drawSecondaryRingParticles(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  ring: SecondaryRingSystem,
+  time: number,
+  activeColor: Rgb,
+  renderTheme: CosmicRenderTheme,
+  opacityScale: number,
+  reducedMotion: boolean,
+) {
+  const motionTime = reducedMotion ? 0 : time;
+  const cosTilt = Math.cos(ring.tilt);
+  const sinTilt = Math.sin(ring.tilt);
+  const centerLane = (ring.lanes - 1) * 0.5;
+  const ringColor = mixRgb(activeColor, FOREGROUND_CLOUD_PURPLE, ring.colorMix);
+
+  for (const particle of ring.particles) {
+    const angle = particle.angle + motionTime * particle.speed;
+    const laneScale = 1 + (particle.lane - centerLane) * ring.laneSpacing;
+    const localX = Math.cos(angle) * ring.radiusX * laneScale;
+    const localY = Math.sin(angle) * ring.radiusY * laneScale;
+    const x = snapToPixel(
+      ring.centerX + localX * cosTilt - localY * sinTilt,
+      scene.pixelRatio,
+    );
+    const y = snapToPixel(
+      ring.centerY + localX * sinTilt + localY * cosTilt,
+      scene.pixelRatio,
+    );
+    const depth = (Math.sin(angle) + 1) * 0.5;
+    const twinkle = reducedMotion
+      ? 0.76
+      : 0.64 + Math.sin(time * 0.00145 + particle.phase) * 0.28;
+    const animatedColor = getAnimatedStarColor(
+      particle.colorSeed,
+      particle.colorOffset,
+      motionTime,
+      activeColor,
+      renderTheme.neutralStarColor,
+      0.76,
+    );
+    const color = mixRgb(animatedColor, ringColor, 0.24);
+    const alpha = renderTheme.secondaryRings.particleAlpha
+      * opacityScale
+      * (0.52 + depth * 0.48)
+      * twinkle;
+    const size = particle.size * (0.78 + depth * 0.58);
+    drawStar(context, x, y, size, color, alpha);
+  }
+}
+
+function drawMainRingAurora(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  activeColor: Rgb,
+  renderTheme: CosmicRenderTheme,
+  reducedMotion: boolean,
+) {
+  updateAuroraTint(
+    scene.aurora,
+    mixRgb(activeColor, renderTheme.neutralStarColor, 0.08),
+  );
+  const motionTime = reducedMotion ? 0 : time;
+  const { orbit } = scene;
+  const auroraWidth = orbit.radiusX * (scene.compact ? 1.16 : 1.08);
+  const auroraHeight = Math.min(
+    scene.height * (scene.compact ? 0.26 : 0.38),
+    scene.compact ? 220 : 340,
+  );
+  const localX = -orbit.radiusX * (scene.compact ? 0.32 : 0.12);
+  const localY = -orbit.radiusY * 0.92 - auroraHeight * 0.54;
+  const driftX = reducedMotion ? 0 : Math.sin(motionTime * 0.000044 + 0.8) * 10;
+  const driftY = reducedMotion ? 0 : Math.cos(motionTime * 0.000036 + 1.7) * 5;
+  const opacityPulse = reducedMotion
+    ? 0.86
+    : 0.8 + Math.sin(motionTime * 0.00018 + 0.4) * 0.14;
+  const stretch = reducedMotion ? 1 : 1 + Math.sin(motionTime * 0.000027 + 2.1) * 0.018;
+  const shear = reducedMotion ? 0 : Math.sin(motionTime * 0.000052 + 1.2) * 0.025;
+
+  context.save();
+  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+  context.translate(orbit.centerX, orbit.centerY);
+  context.rotate(orbit.tilt);
+  context.globalAlpha = renderTheme.aurora.purpleAlpha * opacityPulse;
+  context.drawImage(
+    scene.aurora.purple,
+    localX - driftX * 0.45,
+    localY + driftY * 0.4,
+    auroraWidth * 1.025,
+    auroraHeight * 1.035,
+  );
+
+  context.save();
+  context.translate(localX + driftX, localY + driftY);
+  context.transform(stretch, 0, shear, 1, 0, 0);
+  context.globalAlpha = renderTheme.aurora.activeAlpha * opacityPulse;
+  context.drawImage(scene.aurora.active, 0, 0, auroraWidth, auroraHeight);
+  context.restore();
+  context.restore();
+}
+
 function drawCloudCore(
   context: CanvasRenderingContext2D,
   scene: Scene,
@@ -1250,6 +1692,75 @@ function drawCloudCore(
   glow.addColorStop(1, rgba(activeColor, 0));
   context.fillStyle = glow;
   context.fillRect(centerX - glowRadius, centerY - glowRadius, glowRadius * 2, glowRadius * 2);
+}
+
+function drawForegroundClouds(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  activeColor: Rgb,
+  renderTheme: CosmicRenderTheme,
+  reducedMotion: boolean,
+) {
+  const motionTime = reducedMotion ? 0 : time;
+  const cloudWidth = Math.min(
+    scene.width * (scene.compact ? 1.35 : 0.76),
+    scene.compact ? 660 : 1050,
+  );
+  const cloudHeight = cloudWidth * 0.5;
+  const centerX = scene.width * (scene.compact ? 0.08 : 0.06);
+  const centerY = scene.height * (scene.compact ? 0.92 : 0.94);
+  const driftX = reducedMotion ? 0 : Math.sin(motionTime * 0.000038 + 1.4) * 13;
+  const driftY = reducedMotion ? 0 : Math.cos(motionTime * 0.000031 + 0.7) * 7;
+  const scalePulse = reducedMotion ? 1 : 1 + Math.sin(motionTime * 0.000028 + 2.2) * 0.015;
+  const opacityPulse = reducedMotion
+    ? 0.92
+    : 0.88 + Math.sin(motionTime * 0.00019 + 0.9) * 0.09;
+  const cloudX = centerX + driftX;
+  const cloudY = centerY + driftY;
+
+  context.save();
+  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+  context.translate(cloudX, cloudY);
+  context.rotate(0.045 + Math.sin(motionTime * 0.000017) * 0.012);
+  context.scale(scalePulse, scalePulse);
+  context.globalAlpha = renderTheme.foregroundClouds.purpleAlpha * opacityPulse;
+  context.drawImage(
+    scene.clouds.purple,
+    -cloudWidth * 0.62,
+    -cloudHeight * 0.54,
+    cloudWidth * 1.18,
+    cloudHeight * 1.08,
+  );
+  context.globalAlpha = renderTheme.foregroundClouds.activeAlpha * opacityPulse;
+  context.drawImage(
+    scene.clouds.active,
+    -cloudWidth * 0.52,
+    -cloudHeight * 0.5,
+    cloudWidth * 0.92,
+    cloudHeight,
+  );
+  context.restore();
+
+  const glowColor = mixRgb(activeColor, FOREGROUND_CLOUD_PURPLE, 0.76);
+  const glowRadius = Math.max(cloudWidth * 0.4, 150);
+  context.save();
+  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+  context.translate(cloudX - cloudWidth * 0.08, cloudY);
+  context.scale(1.55, 0.72);
+  const glow = context.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
+  glow.addColorStop(
+    0,
+    rgba(glowColor, renderTheme.foregroundClouds.glowCoreAlpha * opacityPulse),
+  );
+  glow.addColorStop(
+    0.5,
+    rgba(FOREGROUND_CLOUD_PURPLE, renderTheme.foregroundClouds.glowMidAlpha * opacityPulse),
+  );
+  glow.addColorStop(1, rgba(FOREGROUND_CLOUD_PURPLE, 0));
+  context.fillStyle = glow;
+  context.fillRect(-glowRadius, -glowRadius, glowRadius * 2, glowRadius * 2);
+  context.restore();
 }
 
 function drawRingParticles(
@@ -1591,13 +2102,53 @@ function drawScene(
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = 1;
   drawBackgroundWash(context, scene, activeColor, renderTheme);
+  drawSecondaryRingSystem(
+    context,
+    scene.secondaryRings.distant,
+    time,
+    activeColor,
+    renderTheme.secondaryRings.distantAlpha,
+    renderTheme.secondaryRings.dashAlpha * 0.72,
+    reducedMotion,
+  );
+  drawSecondaryRingParticles(
+    context,
+    scene,
+    scene.secondaryRings.distant,
+    time,
+    activeColor,
+    renderTheme,
+    0.72,
+    reducedMotion,
+  );
   drawStarClusterSprites(context, scene, time, renderTheme, isDark, reducedMotion, 'far');
   drawFieldStars(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawMainRingAurora(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawSecondaryRingSystem(
+    context,
+    scene.secondaryRings.inner,
+    time,
+    activeColor,
+    renderTheme.secondaryRings.innerAlpha,
+    renderTheme.secondaryRings.dashAlpha,
+    reducedMotion,
+  );
+  drawSecondaryRingParticles(
+    context,
+    scene,
+    scene.secondaryRings.inner,
+    time,
+    activeColor,
+    renderTheme,
+    0.92,
+    reducedMotion,
+  );
   drawStarClusterSprites(context, scene, time, renderTheme, isDark, reducedMotion, 'ring');
   drawCloudCore(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawStarClusterHighlights(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawRingParticles(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawForegroundClouds(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion);
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
@@ -1620,7 +2171,8 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     const context = canvas?.getContext('2d');
     if (!canvas || !context) return;
     const cloudSprites = createCloudSprites();
-    if (!cloudSprites) return;
+    const auroraSprites = createAuroraSprites();
+    if (!cloudSprites || !auroraSprites) return;
 
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const coarsePointer = window.matchMedia('(pointer: coarse)');
@@ -1675,7 +2227,7 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      scene = createScene(width, height, cloudSprites, dpr);
+      scene = createScene(width, height, cloudSprites, auroraSprites, dpr);
       paint(performance.now());
     };
 
