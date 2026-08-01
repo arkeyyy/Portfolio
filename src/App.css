@@ -331,9 +331,22 @@
 .section-description {
   max-width: 46ch;
   margin: 0 0 4px;
-  color: var(--text-secondary);
+  color: color-mix(
+    in srgb,
+    var(--section-heading-accent) 22%,
+    var(--text-secondary)
+  );
   font-size: clamp(1rem, 1.55vw, 1.12rem);
   line-height: 1.75;
+  transition: color 240ms ease;
+}
+
+.dark .section-description {
+  color: color-mix(
+    in srgb,
+    var(--section-heading-accent) 28%,
+    var(--text-secondary)
+  );
 }
 
 /* Hero */

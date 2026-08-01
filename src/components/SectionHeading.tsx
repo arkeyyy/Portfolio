@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 type SectionHeadingProps = {
   id: string;
   eyebrow: string;
@@ -13,8 +15,10 @@ export default function SectionHeading({
   description,
   color,
 }: SectionHeadingProps) {
+  const headingStyle = { '--section-heading-accent': color } as CSSProperties;
+
   return (
-    <header className="section-heading">
+    <header className="section-heading" style={headingStyle}>
       <div>
         <p className="section-kicker" style={{ color }}>
           {eyebrow}
