@@ -134,6 +134,29 @@ type Quasar = {
   particles: QuasarLightParticle[];
 };
 
+type VortexSprites = {
+  alpha: HTMLCanvasElement;
+  active: HTMLCanvasElement;
+  accent: HTMLCanvasElement;
+  activeContext: CanvasRenderingContext2D;
+  accentContext: CanvasRenderingContext2D;
+  lastActiveColor: string;
+  lastAccentColor: string;
+};
+
+type VortexStar = {
+  angle: number;
+  radius: number;
+  speed: number;
+  size: number;
+  phase: number;
+};
+
+type Vortex = {
+  sprites: VortexSprites;
+  stars: VortexStar[];
+};
+
 type SecondaryRingSystem = OrbitGeometry & {
   lanes: number;
   laneSpacing: number;
@@ -175,6 +198,12 @@ type CosmicRenderTheme = {
     spriteAlpha: number;
     lensAlpha: number;
     particleAlpha: number;
+  };
+  vortex: {
+    activeAlpha: number;
+    accentAlpha: number;
+    coreAlpha: number;
+    starAlpha: number;
   };
   clouds: {
     accentAlpha: number;
@@ -231,6 +260,7 @@ type Scene = {
   clouds: CloudSprites;
   aurora: AuroraSprites;
   quasar: Quasar;
+  vortex: Vortex;
 };
 
 const TAU = Math.PI * 2;
@@ -248,6 +278,7 @@ const ABOUT_CLOUD_ACCENT: Rgb = [158, 88, 255];
 const FOREGROUND_CLOUD_PURPLE: Rgb = [148, 82, 255];
 const QUASAR_LIGHT_BLUE: Rgb = [112, 220, 255];
 const QUASAR_PURPLE: Rgb = [178, 104, 255];
+const VORTEX_STAR_WHITE: Rgb = [246, 249, 255];
 const DEEP_SPACE: Rgb = [10, 14, 54];
 const DARK_STAR_NEUTRAL: Rgb = [225, 234, 255];
 const LIGHT_STAR_NEUTRAL: Rgb = [42, 53, 88];
@@ -267,6 +298,7 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     },
     aurora: { activeAlpha: 0.76, purpleAlpha: 0.32 },
     quasar: { spriteAlpha: 0.82, lensAlpha: 0.48, particleAlpha: 0.76 },
+    vortex: { activeAlpha: 0.56, accentAlpha: 0.34, coreAlpha: 0.065, starAlpha: 0.88 },
     clouds: {
       accentAlpha: 0.4,
       activeAlpha: 0.7,
@@ -316,6 +348,7 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     },
     aurora: { activeAlpha: 0.38, purpleAlpha: 0.16 },
     quasar: { spriteAlpha: 0.5, lensAlpha: 0.28, particleAlpha: 0.46 },
+    vortex: { activeAlpha: 0.26, accentAlpha: 0.17, coreAlpha: 0.028, starAlpha: 0.58 },
     clouds: {
       accentAlpha: 0.15,
       activeAlpha: 0.26,
@@ -731,6 +764,116 @@ function createAuroraAlphaSprite() {
   return canvas;
 }
 
+function createVortexAlphaSprite() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 768;
+  canvas.height = 512;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const centerX = canvas.width * 0.5;
+  const centerY = canvas.height * 0.5;
+
+  context.save();
+  context.translate(centerX, centerY);
+  context.globalCompositeOperation = 'lighter';
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.filter = 'blur(7px)';
+  for (let arm = 0; arm < 12; arm += 1) {
+    const seed = 6100 + arm * 31.7;
+    const phase = (arm / 12) * TAU + (seededRandom(seed) - 0.5) * 0.24;
+    const turns = 1.2 + seededRandom(seed + 2.3) * 0.55;
+    context.strokeStyle = `rgba(255, 255, 255, ${0.038 + seededRandom(seed + 4.9) * 0.045})`;
+    context.lineWidth = 12 + seededRandom(seed + 7.1) * 18;
+    context.beginPath();
+    for (let point = 0; point < 74; point += 1) {
+      const progress = point / 73;
+      const angle = phase + progress * turns * TAU;
+      const wobble = Math.sin(progress * TAU * 3 + seed) * (2 + progress * 4);
+      const radius = 18 + progress * 224 + wobble;
+      const x = Math.cos(angle) * radius * 1.48;
+      const y = Math.sin(angle) * radius * 0.9;
+      if (point === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    }
+    context.stroke();
+  }
+
+  context.filter = 'blur(0.75px)';
+  for (let filament = 0; filament < 38; filament += 1) {
+    const seed = 7200 + filament * 43.9;
+    const phase = seededRandom(seed + 1.1) * TAU;
+    const turns = 1.15 + seededRandom(seed + 3.7) * 0.9;
+    const startRadius = 12 + seededRandom(seed + 5.9) * 34;
+    const reach = 158 + seededRandom(seed + 8.3) * 88;
+    context.strokeStyle = `rgba(255, 255, 255, ${0.085 + seededRandom(seed + 10.7) * 0.15})`;
+    context.lineWidth = 0.85 + seededRandom(seed + 12.1) * 3.3;
+    context.setLineDash([
+      16 + seededRandom(seed + 14.3) * 34,
+      5 + seededRandom(seed + 16.7) * 15,
+      3 + seededRandom(seed + 18.9) * 12,
+      8 + seededRandom(seed + 21.1) * 22,
+    ]);
+    context.lineDashOffset = seededRandom(seed + 23.7) * 80;
+    context.beginPath();
+    for (let point = 0; point < 82; point += 1) {
+      const progress = point / 81;
+      const angle = phase + progress * turns * TAU;
+      const ripple = Math.sin(progress * TAU * 4 + seed) * (1.2 + progress * 3.4);
+      const radius = startRadius + progress * reach + ripple;
+      const x = Math.cos(angle) * radius * 1.48;
+      const y = Math.sin(angle) * radius * 0.9;
+      if (point === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    }
+    context.stroke();
+  }
+  context.setLineDash([]);
+
+  context.filter = 'blur(1px)';
+  for (let knot = 0; knot < 24; knot += 1) {
+    const seed = 8600 + knot * 47.3;
+    const progress = 0.18 + seededRandom(seed + 1.9) * 0.74;
+    const angle = seededRandom(seed + 4.1) * TAU + progress * TAU * 1.6;
+    const radius = 24 + progress * 215;
+    const x = Math.cos(angle) * radius * 1.48;
+    const y = Math.sin(angle) * radius * 0.9;
+    const knotRadius = 2 + seededRandom(seed + 6.7) * 6;
+    const gradient = context.createRadialGradient(x, y, 0, x, y, knotRadius);
+    gradient.addColorStop(0, `rgba(255, 255, 255, ${0.12 + seededRandom(seed + 8.9) * 0.13})`);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    context.fillStyle = gradient;
+    context.fillRect(
+      x - knotRadius,
+      y - knotRadius,
+      knotRadius * 2,
+      knotRadius * 2,
+    );
+  }
+  context.restore();
+
+  context.globalCompositeOperation = 'destination-in';
+  const edgeFade = context.createRadialGradient(
+    centerX,
+    centerY,
+    12,
+    centerX,
+    centerY,
+    canvas.width * 0.49,
+  );
+  edgeFade.addColorStop(0, 'rgba(255, 255, 255, 0.38)');
+  edgeFade.addColorStop(0.1, 'rgba(255, 255, 255, 0.82)');
+  edgeFade.addColorStop(0.28, 'rgba(255, 255, 255, 1)');
+  edgeFade.addColorStop(0.76, 'rgba(255, 255, 255, 0.88)');
+  edgeFade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.fillStyle = edgeFade;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.globalCompositeOperation = 'source-over';
+  context.filter = 'none';
+
+  return canvas;
+}
+
 function createQuasarSprite() {
   const canvas = document.createElement('canvas');
   canvas.width = 320;
@@ -839,6 +982,23 @@ function createTintCanvas(alphaCanvas: HTMLCanvasElement, color: Rgb) {
   return { canvas, context };
 }
 
+function createVortexSprites(): VortexSprites | null {
+  const alpha = createVortexAlphaSprite();
+  const activeTint = createTintCanvas(alpha, DEFAULT_ACTIVE_COLOR);
+  const accentTint = createTintCanvas(alpha, CLOUD_ACCENT);
+  if (!activeTint.context || !accentTint.context) return null;
+
+  return {
+    alpha,
+    active: activeTint.canvas,
+    accent: accentTint.canvas,
+    activeContext: activeTint.context,
+    accentContext: accentTint.context,
+    lastActiveColor: '',
+    lastAccentColor: '',
+  };
+}
+
 function createAuroraSprites(): AuroraSprites | null {
   const alpha = createAuroraAlphaSprite();
   const activeTint = createTintCanvas(alpha, DEFAULT_ACTIVE_COLOR);
@@ -925,6 +1085,23 @@ function updateAuroraTint(aurora: AuroraSprites, color: Rgb) {
     aurora.alpha,
     color,
     aurora.lastActiveColor,
+  );
+}
+
+function updateVortexTints(vortex: VortexSprites, activeColor: Rgb, accentColor: Rgb) {
+  vortex.lastActiveColor = updateCloudTint(
+    vortex.active,
+    vortex.activeContext,
+    vortex.alpha,
+    activeColor,
+    vortex.lastActiveColor,
+  );
+  vortex.lastAccentColor = updateCloudTint(
+    vortex.accent,
+    vortex.accentContext,
+    vortex.alpha,
+    accentColor,
+    vortex.lastAccentColor,
   );
 }
 
@@ -1221,12 +1398,27 @@ function createQuasarLightParticles(count: number) {
   });
 }
 
+function createVortexStars(count: number) {
+  return Array.from({ length: count }, (_, index): VortexStar => {
+    const seed = 9400 + index * 41.3;
+    const radius = 0.12 + seededRandom(seed + 1.7) * 0.62;
+    return {
+      angle: seededRandom(seed + 3.9) * TAU,
+      radius,
+      speed: 0.000014 + (1 - radius) * 0.000026 + seededRandom(seed + 6.1) * 0.000008,
+      size: 0.55 + seededRandom(seed + 8.7) * 1.2,
+      phase: seededRandom(seed + 11.3) * TAU,
+    };
+  });
+}
+
 function createScene(
   width: number,
   height: number,
   clouds: CloudSprites,
   aurora: AuroraSprites,
   quasarSprite: HTMLCanvasElement,
+  vortexSprites: VortexSprites,
   pixelRatio: number,
 ): Scene {
   const compact = width < 720;
@@ -1345,6 +1537,10 @@ function createScene(
     sprite: quasarSprite,
     particles: createQuasarLightParticles(compact ? 10 : 16),
   };
+  const vortex: Vortex = {
+    sprites: vortexSprites,
+    stars: createVortexStars(compact ? 24 : 46),
+  };
   const secondaryRings: Scene['secondaryRings'] = {
     distant: {
       centerX: width * (compact ? 0.86 : 0.9),
@@ -1412,6 +1608,7 @@ function createScene(
     clouds,
     aurora,
     quasar,
+    vortex,
   };
 }
 
@@ -1955,6 +2152,113 @@ function drawCloudCore(
   context.fillRect(centerX - glowRadius, centerY - glowRadius, glowRadius * 2, glowRadius * 2);
 }
 
+function drawVortex(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  activeColor: Rgb,
+  renderTheme: CosmicRenderTheme,
+  reducedMotion: boolean,
+) {
+  const innerRing = scene.secondaryRings.inner;
+  const accentColor = getNebulaAccentColor(activeColor);
+  updateVortexTints(
+    scene.vortex.sprites,
+    mixRgb(activeColor, accentColor, 0.12),
+    accentColor,
+  );
+  const motionTime = reducedMotion ? 0 : time;
+  const vortexWidth = innerRing.radiusX * (scene.compact ? 1.3 : 1.45);
+  const vortexHeight = innerRing.radiusY * (scene.compact ? 1.2 : 1.35);
+  const activeRotation = reducedMotion ? 0.18 : 0.18 + motionTime * 0.000017;
+  const accentRotation = reducedMotion ? -0.24 : -0.24 + motionTime * 0.000011;
+  const opacityPulse = reducedMotion
+    ? 0.92
+    : 0.86 + Math.sin(motionTime * 0.00015 + 0.6) * 0.1;
+  const scalePulse = reducedMotion
+    ? 1
+    : 1 + Math.sin(motionTime * 0.000035 + 1.8) * 0.018;
+
+  context.save();
+  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+  context.translate(innerRing.centerX, innerRing.centerY);
+  context.rotate(innerRing.tilt);
+  context.beginPath();
+  context.ellipse(0, 0, vortexWidth * 0.52, vortexHeight * 0.52, 0, 0, TAU);
+  context.clip();
+
+  context.save();
+  context.scale(1, vortexHeight / vortexWidth);
+  const coreRadius = vortexWidth * 0.31;
+  const coreGlow = context.createRadialGradient(0, 0, 0, 0, 0, coreRadius);
+  coreGlow.addColorStop(
+    0,
+    rgba(mixRgb(activeColor, accentColor, 0.44), renderTheme.vortex.coreAlpha),
+  );
+  coreGlow.addColorStop(0.46, rgba(accentColor, renderTheme.vortex.coreAlpha * 0.55));
+  coreGlow.addColorStop(1, rgba(accentColor, 0));
+  context.fillStyle = coreGlow;
+  context.fillRect(-coreRadius, -coreRadius, coreRadius * 2, coreRadius * 2);
+  context.restore();
+
+  context.save();
+  context.scale(1, vortexHeight / vortexWidth);
+  context.rotate(accentRotation);
+  context.scale(scalePulse * 1.035, scalePulse * 1.035);
+  context.globalAlpha = renderTheme.vortex.accentAlpha * opacityPulse;
+  context.drawImage(
+    scene.vortex.sprites.accent,
+    -vortexWidth * 0.53,
+    -vortexWidth * 0.53,
+    vortexWidth * 1.06,
+    vortexWidth * 1.06,
+  );
+  context.restore();
+
+  context.save();
+  context.scale(1, vortexHeight / vortexWidth);
+  context.rotate(activeRotation);
+  context.scale(scalePulse, scalePulse);
+  context.globalAlpha = renderTheme.vortex.activeAlpha * opacityPulse;
+  context.drawImage(
+    scene.vortex.sprites.active,
+    -vortexWidth * 0.5,
+    -vortexWidth * 0.5,
+    vortexWidth,
+    vortexWidth,
+  );
+  context.restore();
+  context.restore();
+
+  const cosTilt = Math.cos(innerRing.tilt);
+  const sinTilt = Math.sin(innerRing.tilt);
+  for (const star of scene.vortex.stars) {
+    const angle = star.angle + motionTime * star.speed;
+    const localX = Math.cos(angle) * vortexWidth * 0.5 * star.radius;
+    const localY = Math.sin(angle) * vortexHeight * 0.5 * star.radius;
+    const x = snapToPixel(
+      innerRing.centerX + localX * cosTilt - localY * sinTilt,
+      scene.pixelRatio,
+    );
+    const y = snapToPixel(
+      innerRing.centerY + localX * sinTilt + localY * cosTilt,
+      scene.pixelRatio,
+    );
+    const twinkle = reducedMotion
+      ? 0.78
+      : 0.68 + Math.sin(time * 0.0015 + star.phase) * 0.26;
+    const depth = 0.7 + star.radius * 0.3;
+    drawStar(
+      context,
+      x,
+      y,
+      star.size * depth,
+      VORTEX_STAR_WHITE,
+      renderTheme.vortex.starAlpha * twinkle * depth,
+    );
+  }
+}
+
 function drawForegroundClouds(
   context: CanvasRenderingContext2D,
   scene: Scene,
@@ -2408,6 +2712,7 @@ function drawScene(
   );
   drawStarClusterSprites(context, scene, time, renderTheme, isDark, reducedMotion, 'ring');
   drawCloudCore(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawVortex(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawStarClusterHighlights(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawRingParticles(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawForegroundClouds(context, scene, time, activeColor, renderTheme, reducedMotion);
@@ -2435,7 +2740,8 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     const cloudSprites = createCloudSprites();
     const auroraSprites = createAuroraSprites();
     const quasarSprite = createQuasarSprite();
-    if (!cloudSprites || !auroraSprites) return;
+    const vortexSprites = createVortexSprites();
+    if (!cloudSprites || !auroraSprites || !vortexSprites) return;
 
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const coarsePointer = window.matchMedia('(pointer: coarse)');
@@ -2490,7 +2796,15 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
-      scene = createScene(width, height, cloudSprites, auroraSprites, quasarSprite, dpr);
+      scene = createScene(
+        width,
+        height,
+        cloudSprites,
+        auroraSprites,
+        quasarSprite,
+        vortexSprites,
+        dpr,
+      );
       paint(performance.now());
     };
 
