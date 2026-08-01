@@ -24,17 +24,32 @@ type RingParticle = {
   colorOffset: number;
 };
 
-type Planet = {
-  x: number;
-  y: number;
+type PlanetBase = {
   size: number;
-  speed: number;
   phase: number;
-  driftX: number;
-  driftY: number;
+  spinSpeed: number;
   ringed: boolean;
   kind: PlanetKind;
 };
+
+type OrbitingPlanet = PlanetBase & {
+  motion: 'orbit';
+  angle: number;
+  lane: number;
+  speed: number;
+  direction: 1 | -1;
+};
+
+type RoguePlanet = PlanetBase & {
+  motion: 'rogue';
+  x: number;
+  y: number;
+  velocityX: number;
+  waveY: number;
+  waveSpeed: number;
+};
+
+type Planet = OrbitingPlanet | RoguePlanet;
 
 type OrbitGeometry = {
   centerX: number;
@@ -65,6 +80,12 @@ type Scene = {
 
 const TAU = Math.PI * 2;
 const STAR_COLOR_FADE_MS = 1500;
+const PLANET_VISIBILITY_SLOT_MS = 26_000;
+const PLANET_VISIBILITY_FADE_MS = 2_200;
+const PLANET_SECONDARY_START_MS = 8_500;
+const PLANET_SECONDARY_END_MS = 20_500;
+const PLANET_RARE_START_MS = 13_200;
+const PLANET_RARE_END_MS = 16_000;
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const CLOUD_ACCENT: Rgb = [72, 78, 255];
 const DEEP_SPACE: Rgb = [10, 14, 54];
@@ -122,6 +143,61 @@ function clamp(value: number, min: number, max: number) {
 
 function smoothstep(value: number) {
   return value * value * (3 - 2 * value);
+}
+
+function getWindowOpacity(time: number, start: number, end: number, fadeDuration: number) {
+  const fadeIn = smoothstep(clamp((time - start) / fadeDuration, 0, 1));
+  const fadeOut = 1 - smoothstep(clamp((time - (end - fadeDuration)) / fadeDuration, 0, 1));
+  return Math.min(fadeIn, fadeOut);
+}
+
+function getPlanetVisibility(
+  index: number,
+  planetCount: number,
+  time: number,
+  reducedMotion: boolean,
+) {
+  if (reducedMotion) return index < Math.min(2, planetCount) ? 1 : 0;
+
+  const slotIndex = Math.floor(time / PLANET_VISIBILITY_SLOT_MS);
+  const slotTime = time % PLANET_VISIBILITY_SLOT_MS;
+  const primaryIndex = slotIndex % planetCount;
+  const previousIndex = (primaryIndex - 1 + planetCount) % planetCount;
+  const secondaryIndex = (primaryIndex + 2) % planetCount;
+  const rareIndex = (primaryIndex + 4) % planetCount;
+  const primaryFade = smoothstep(clamp(slotTime / PLANET_VISIBILITY_FADE_MS, 0, 1));
+
+  let opacity = index === primaryIndex ? primaryFade : 0;
+  if (index === previousIndex && slotTime < PLANET_VISIBILITY_FADE_MS) {
+    opacity = Math.max(opacity, 1 - primaryFade);
+  }
+
+  if (index === secondaryIndex) {
+    opacity = Math.max(
+      opacity,
+      getWindowOpacity(
+        slotTime,
+        PLANET_SECONDARY_START_MS,
+        PLANET_SECONDARY_END_MS,
+        PLANET_VISIBILITY_FADE_MS,
+      ),
+    );
+  }
+
+  const isRareOverlap = slotIndex % 7 === 2;
+  if (isRareOverlap && index === rareIndex) {
+    opacity = Math.max(
+      opacity,
+      getWindowOpacity(
+        slotTime,
+        PLANET_RARE_START_MS,
+        PLANET_RARE_END_MS,
+        PLANET_VISIBILITY_FADE_MS * 0.45,
+      ),
+    );
+  }
+
+  return opacity;
 }
 
 function rgba(color: Rgb, alpha: number) {
@@ -350,11 +426,68 @@ function createScene(width: number, height: number, clouds: CloudSprites): Scene
     }),
   );
   const planets: Planet[] = [
-    { x: 0.91, y: 0.25, size: compact ? 0.054 : 0.09, speed: 0.000021, phase: 0.3, driftX: 14, driftY: 8, ringed: false, kind: 'violet' },
-    { x: 0.025, y: 0.78, size: compact ? 0.045 : 0.072, speed: 0.000017, phase: 2.1, driftX: 7, driftY: 11, ringed: true, kind: 'amber' },
-    { x: 0.39, y: 0.56, size: 0.027, speed: 0.000026, phase: 4.2, driftX: 8, driftY: 6, ringed: false, kind: 'rocky' },
-    { x: 0.79, y: 0.73, size: 0.042, speed: 0.000019, phase: 5.4, driftX: 10, driftY: 9, ringed: false, kind: 'ocean' },
-    { x: 0.58, y: 0.16, size: 0.021, speed: 0.000024, phase: 1.4, driftX: 7, driftY: 10, ringed: false, kind: 'ice' },
+    {
+      motion: 'rogue',
+      x: 0.91,
+      y: 0.25,
+      size: compact ? 0.054 : 0.09,
+      velocityX: -0.014,
+      waveY: 24,
+      waveSpeed: 0.00009,
+      phase: 0.3,
+      spinSpeed: 0.00022,
+      ringed: false,
+      kind: 'violet',
+    },
+    {
+      motion: 'orbit',
+      angle: 4.72,
+      lane: 1,
+      size: compact ? 0.045 : 0.072,
+      speed: 0.000026,
+      direction: 1,
+      phase: 2.1,
+      spinSpeed: 0.00018,
+      ringed: true,
+      kind: 'amber',
+    },
+    {
+      motion: 'orbit',
+      angle: 5.32,
+      lane: 0,
+      size: 0.027,
+      speed: 0.000038,
+      direction: -1,
+      phase: 4.2,
+      spinSpeed: 0.00028,
+      ringed: false,
+      kind: 'rocky',
+    },
+    {
+      motion: 'rogue',
+      x: 0.18,
+      y: 0.73,
+      size: 0.042,
+      velocityX: 0.01,
+      waveY: 18,
+      waveSpeed: 0.00012,
+      phase: 5.4,
+      spinSpeed: 0.0002,
+      ringed: false,
+      kind: 'ocean',
+    },
+    {
+      motion: 'orbit',
+      angle: 5.74,
+      lane: 2,
+      size: 0.021,
+      speed: 0.00003,
+      direction: 1,
+      phase: 1.4,
+      spinSpeed: 0.00031,
+      ringed: false,
+      kind: 'ice',
+    },
   ];
   const orbit: OrbitGeometry = compact
     ? {
@@ -795,23 +928,66 @@ function drawPlanets(
   const planetCount = scene.compact ? 3 : scene.planets.length;
   const minDimension = Math.min(scene.width, scene.height);
   const motionTime = reducedMotion ? 0 : time;
+  const { orbit } = scene;
+  const cosTilt = Math.cos(orbit.tilt);
+  const sinTilt = Math.sin(orbit.tilt);
 
   for (let index = 0; index < planetCount; index += 1) {
     const planet = scene.planets[index];
-    const phase = planet.phase + motionTime * planet.speed;
-    const x = planet.x * scene.width + Math.sin(phase) * planet.driftX;
-    const y = planet.y * scene.height + Math.cos(phase) * planet.driftY;
+    const visibility = getPlanetVisibility(index, planetCount, time, reducedMotion);
+    if (visibility <= 0.01) continue;
+
+    context.save();
+    context.globalAlpha *= visibility;
+    const surfacePhase = planet.phase + motionTime * planet.spinSpeed;
+    let x: number;
+    let y: number;
+    let radius = minDimension * planet.size;
+
+    if (planet.motion === 'orbit') {
+      const angle = planet.angle + motionTime * planet.speed * planet.direction;
+      const laneScale = 0.84 + planet.lane * 0.085;
+      const localX = Math.cos(angle) * orbit.radiusX * laneScale;
+      const localY = Math.sin(angle) * orbit.radiusY * laneScale;
+      x = orbit.centerX + localX * cosTilt - localY * sinTilt;
+      y = orbit.centerY + localX * sinTilt + localY * cosTilt;
+      const depth = (Math.sin(angle) + 1) * 0.5;
+      radius *= 0.82 + depth * 0.28;
+    } else {
+      const offscreenMargin = radius * 2.4;
+      const travelWidth = scene.width + offscreenMargin * 2;
+      const travelledX = planet.x * scene.width + motionTime * planet.velocityX + offscreenMargin;
+      x = ((travelledX % travelWidth) + travelWidth) % travelWidth - offscreenMargin;
+      y = planet.y * scene.height
+        + Math.sin(planet.phase + motionTime * planet.waveSpeed) * planet.waveY;
+
+      const direction = Math.sign(planet.velocityX) || 1;
+      const trailEndX = x - direction * radius * 3.2;
+      const trailColor = mixRgb(PLANET_PALETTES[planet.kind].feature, activeColor, 0.16);
+      const trail = context.createLinearGradient(x, y, trailEndX, y);
+      trail.addColorStop(0, rgba(trailColor, isDark ? 0.28 : 0.14));
+      trail.addColorStop(1, rgba(trailColor, 0));
+      context.strokeStyle = trail;
+      context.lineWidth = Math.max(1, radius * 0.1);
+      context.lineCap = 'round';
+      context.beginPath();
+      context.moveTo(x, y);
+      context.lineTo(trailEndX, y);
+      context.stroke();
+    }
+
     drawPlanet(
       context,
       x,
       y,
-      minDimension * planet.size,
+      radius,
       activeColor,
       isDark,
       planet.ringed,
-      phase,
+      surfacePhase,
       planet.kind,
     );
+    context.restore();
   }
 }
 
