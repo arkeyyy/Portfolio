@@ -31,7 +31,7 @@ export default function EducationPage() {
             <p className="education-campus">
               <MapPin aria-hidden="true" /> Cebu City
             </p>
-            <p className="education-school">Cebu Institute of Technology — University</p>
+            <p className="education-school">Cebu Institute of Technology – University</p>
           </div>
         </div>
 
@@ -45,7 +45,7 @@ export default function EducationPage() {
 
           <p className="education-date">
             <CalendarDays aria-hidden="true" />
-            <time>2023 — 2027</time>
+            <time>2023 – 2027</time>
           </p>
 
           <p className="education-description">

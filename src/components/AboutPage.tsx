@@ -23,7 +23,7 @@ export default function AboutPage() {
           </h1>
 
           <p className="hero-summary">
-            I build interpreters, web experiences, and practical systems from end to end—pairing
+            I build interpreters, web experiences, and practical systems from end to end–pairing
             sound engineering with a sharp eye for the people using what I create.
           </p>
 

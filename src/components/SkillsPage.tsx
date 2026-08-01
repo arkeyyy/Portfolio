@@ -98,7 +98,7 @@ export default function SkillsPage() {
         number="03"
         eyebrow="Toolkit"
         title="A broad base, used with intention."
-        description="I choose tools around the problem—not the other way around—and stay comfortable moving between low-level logic, data, and interface work."
+        description="I choose tools around the problem–not the other way around–and stay comfortable moving between low-level logic, data, and interface work."
         color="var(--skills-ink)"
       />
 

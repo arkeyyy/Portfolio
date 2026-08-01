@@ -36,7 +36,7 @@
 
 .page-section {
   position: relative;
-  padding-block: clamp(5.5rem, 10vw, 9rem);
+  padding-block: clamp(4rem, 7vw, 6.5rem);
 }
 
 /* Ambient, section-aware background */
@@ -380,9 +380,9 @@
 /* Hero */
 .hero-section {
   display: flex;
-  min-height: min(900px, calc(100dvh - 76px));
+  min-height: min(820px, calc(100dvh - 76px));
   align-items: center;
-  padding-top: clamp(3.5rem, 7vw, 6rem);
+  padding-top: clamp(2.75rem, 5vw, 4.5rem);
 }
 
 .hero-layout {
@@ -1201,7 +1201,7 @@
 
 /* Contact */
 .contact-section {
-  padding-bottom: clamp(6rem, 10vw, 9rem);
+  padding-bottom: clamp(4rem, 7vw, 6.5rem);
 }
 
 .contact-panel {
@@ -1526,7 +1526,7 @@
   }
 
   .page-section {
-    padding-block: 5.25rem;
+    padding-block: 4.25rem;
   }
 
   .section-heading {
@@ -1539,7 +1539,7 @@
   }
 
   .hero-section {
-    padding-top: 3.75rem;
+    padding-top: 3rem;
   }
 
   .hero-eyebrow {
