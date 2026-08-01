@@ -952,7 +952,6 @@
   width: 19px;
   height: 19px;
   flex: 0 0 19px;
-  color: var(--text-tertiary);
   transition: color 180ms ease;
 }
 

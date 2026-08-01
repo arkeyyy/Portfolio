@@ -29,58 +29,58 @@ const skillCategories = [
     title: 'Languages',
     description: 'The foundations I use to reason about systems and solve problems.',
     skills: [
-      { name: 'C', icon: SiC, hoverColor: 'group-hover:text-[#1c73ff]' },
-      { name: 'C++', icon: SiCplusplus, hoverColor: 'group-hover:text-[#1c73ff]' },
-      { name: 'C#', icon: TbBrandCSharp, hoverColor: 'group-hover:text-[#903BA7]' },
-      { name: 'Java', icon: FaJava, hoverColor: 'group-hover:text-[#f89820]' },
-      { name: 'Kotlin', icon: SiKotlin, hoverColor: 'group-hover:text-[#7F52FF]' },
-      { name: 'Python', icon: SiPython, hoverColor: 'group-hover:text-[#3776AB]' },
-      { name: 'Perl', icon: SiPerl, hoverColor: 'group-hover:text-[#39457E]' },
-      { name: 'HTML', icon: SiHtml5, hoverColor: 'group-hover:text-[#E34F26]' },
-      { name: 'CSS', icon: SiCss, hoverColor: 'group-hover:text-[#1572B6]' },
-      { name: 'JavaScript', icon: SiJavascript, hoverColor: 'group-hover:text-[#d6b900]' },
+      { name: 'C', icon: SiC, color: 'text-[#1c73ff]' },
+      { name: 'C++', icon: SiCplusplus, color: 'text-[#1c73ff]' },
+      { name: 'C#', icon: TbBrandCSharp, color: 'text-[#903BA7] dark:text-[#c174d4]' },
+      { name: 'Java', icon: FaJava, color: 'text-[#f89820]' },
+      { name: 'Kotlin', icon: SiKotlin, color: 'text-[#7F52FF] dark:text-[#a98cff]' },
+      { name: 'Python', icon: SiPython, color: 'text-[#3776AB] dark:text-[#63a4d8]' },
+      { name: 'Perl', icon: SiPerl, color: 'text-[#39457E] dark:text-[#8297df]' },
+      { name: 'HTML', icon: SiHtml5, color: 'text-[#E34F26]' },
+      { name: 'CSS', icon: SiCss, color: 'text-[#1572B6] dark:text-[#4da7e8]' },
+      { name: 'JavaScript', icon: SiJavascript, color: 'text-[#b89b00] dark:text-[#F7DF1E]' },
     ],
   },
   {
     title: 'Frameworks',
     description: 'Tools for shaping reliable web applications and interfaces.',
     skills: [
-      { name: 'React.js', icon: SiReact, hoverColor: 'group-hover:text-[#149ECA]' },
-      { name: 'Node.js', icon: SiNodedotjs, hoverColor: 'group-hover:text-[#339933]' },
-      { name: 'Django', icon: SiDjango, hoverColor: 'group-hover:text-[#1c7c54]' },
-      { name: 'Spring Boot', icon: SiSpringboot, hoverColor: 'group-hover:text-[#6DB33F]' },
-      { name: 'Tailwind CSS', icon: SiTailwindcss, hoverColor: 'group-hover:text-[#06B6D4]' },
+      { name: 'React.js', icon: SiReact, color: 'text-[#149ECA] dark:text-[#61DAFB]' },
+      { name: 'Node.js', icon: SiNodedotjs, color: 'text-[#339933] dark:text-[#62bd62]' },
+      { name: 'Django', icon: SiDjango, color: 'text-[#1c7c54] dark:text-[#44B78B]' },
+      { name: 'Spring Boot', icon: SiSpringboot, color: 'text-[#5d9f34] dark:text-[#83c95a]' },
+      { name: 'Tailwind CSS', icon: SiTailwindcss, color: 'text-[#089bb5] dark:text-[#38d5ef]' },
     ],
   },
   {
     title: 'Databases',
     description: 'Structured and flexible data layers for application work.',
     skills: [
-      { name: 'PostgreSQL', icon: SiPostgresql, hoverColor: 'group-hover:text-[#4169E1]' },
-      { name: 'MySQL', icon: SiMysql, hoverColor: 'group-hover:text-[#00758F]' },
-      { name: 'MongoDB', icon: SiMongodb, hoverColor: 'group-hover:text-[#47A248]' },
-      { name: 'Supabase', icon: SiSupabase, hoverColor: 'group-hover:text-[#3ECF8E]' },
+      { name: 'PostgreSQL', icon: SiPostgresql, color: 'text-[#4169E1] dark:text-[#7f9cff]' },
+      { name: 'MySQL', icon: SiMysql, color: 'text-[#00758F] dark:text-[#38abc5]' },
+      { name: 'MongoDB', icon: SiMongodb, color: 'text-[#37823a] dark:text-[#62c565]' },
+      { name: 'Supabase', icon: SiSupabase, color: 'text-[#218d64] dark:text-[#3ECF8E]' },
     ],
   },
   {
     title: 'Tools & AI',
     description: 'The supporting toolkit behind my design and development workflow.',
     skills: [
-      { name: 'Figma', icon: SiFigma, hoverColor: 'group-hover:text-[#F24E1E]' },
-      { name: 'Git & GitHub', icon: SiGithub, hoverColor: 'group-hover:text-[var(--text-primary)]' },
-      { name: 'OpenAI API', icon: BsOpenai, hoverColor: 'group-hover:text-[var(--text-primary)]' },
-      { name: 'Claude API', icon: FaRobot, hoverColor: 'group-hover:text-[#D97757]' },
+      { name: 'Figma', icon: SiFigma, color: 'text-[#F24E1E] dark:text-[#ff8060]' },
+      { name: 'Git & GitHub', icon: SiGithub, color: 'text-[var(--text-primary)]' },
+      { name: 'OpenAI API', icon: BsOpenai, color: 'text-[var(--text-primary)]' },
+      { name: 'Claude API', icon: FaRobot, color: 'text-[#C15F3C] dark:text-[#D97757]' },
     ],
   },
   {
     title: 'Core Concepts',
     description: 'The patterns and principles I carry from one stack to the next.',
     skills: [
-      { name: 'CRUD', icon: FaDatabase, hoverColor: 'group-hover:text-[var(--skills)]' },
-      { name: 'OOP', icon: FaCubes, hoverColor: 'group-hover:text-[var(--skills)]' },
-      { name: 'Data Structures', icon: FaSitemap, hoverColor: 'group-hover:text-[var(--skills)]' },
-      { name: 'Algorithms', icon: FaCogs, hoverColor: 'group-hover:text-[var(--skills)]' },
-      { name: 'API Design', icon: FaNetworkWired, hoverColor: 'group-hover:text-[var(--skills)]' },
+      { name: 'CRUD', icon: FaDatabase, color: 'text-[var(--skills-ink)]' },
+      { name: 'OOP', icon: FaCubes, color: 'text-[var(--skills-ink)]' },
+      { name: 'Data Structures', icon: FaSitemap, color: 'text-[var(--skills-ink)]' },
+      { name: 'Algorithms', icon: FaCogs, color: 'text-[var(--skills-ink)]' },
+      { name: 'API Design', icon: FaNetworkWired, color: 'text-[var(--skills-ink)]' },
     ],
   },
 ];
@@ -110,9 +110,9 @@ export default function SkillsPage() {
 
             <ul className="skill-list">
               {category.skills.map((skill) => (
-                <li key={skill.name} className="skill-item group">
+                <li key={skill.name} className="skill-item">
                   <skill.icon
-                    className={`skill-icon ${skill.hoverColor}`}
+                    className={`skill-icon ${skill.color}`}
                     aria-hidden="true"
                   />
                   <span>{skill.name}</span>
