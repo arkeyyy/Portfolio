@@ -1261,6 +1261,11 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
 
   return (
     <div className="ambient-background" aria-hidden="true">
+      <div className="ambient-edge-glows">
+        <span className="ambient-edge-glow ambient-edge-glow-top-left" />
+        <span className="ambient-edge-glow ambient-edge-glow-top-right" />
+        <span className="ambient-edge-glow ambient-edge-glow-bottom-right" />
+      </div>
       <canvas ref={canvasRef} className="cosmic-canvas" />
       <div className="ambient-noise" />
     </div>

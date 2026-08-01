@@ -60,6 +60,116 @@
     linear-gradient(180deg, color-mix(in srgb, var(--page-bg) 94%, transparent), var(--page-bg));
 }
 
+.ambient-edge-glows {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.ambient-edge-glow {
+  --glow-rest-opacity: 0.22;
+  --glow-peak-opacity: 0.6;
+
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(52px) saturate(130%);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.ambient-edge-glow-top-left {
+  top: -26%;
+  left: -24%;
+  width: min(72vw, 940px);
+  height: min(66vh, 760px);
+  background: radial-gradient(ellipse, rgba(76, 142, 255, 0.32), transparent 72%);
+  animation: edge-glow-top-left 20s ease-in-out infinite;
+}
+
+.ambient-edge-glow-top-right {
+  top: -24%;
+  right: -22%;
+  width: min(68vw, 880px);
+  height: min(62vh, 720px);
+  background: radial-gradient(ellipse, rgba(142, 100, 255, 0.3), transparent 72%);
+  animation: edge-glow-top-right 24s ease-in-out infinite;
+}
+
+.ambient-edge-glow-bottom-right {
+  right: -26%;
+  bottom: -30%;
+  width: min(78vw, 1020px);
+  height: min(72vh, 820px);
+  background: radial-gradient(
+    ellipse,
+    color-mix(in srgb, var(--active-color) 22%, rgba(98, 122, 255, 0.24)),
+    transparent 74%
+  );
+  animation: edge-glow-bottom-right 28s ease-in-out infinite;
+}
+
+.dark .ambient-edge-glow {
+  --glow-rest-opacity: 0.3;
+  --glow-peak-opacity: 0.72;
+}
+
+.dark .ambient-edge-glow-top-left {
+  background: radial-gradient(ellipse, rgba(30, 102, 255, 0.4), transparent 72%);
+}
+
+.dark .ambient-edge-glow-top-right {
+  background: radial-gradient(ellipse, rgba(120, 62, 255, 0.38), transparent 72%);
+}
+
+.dark .ambient-edge-glow-bottom-right {
+  background: radial-gradient(
+    ellipse,
+    color-mix(in srgb, var(--active-color) 28%, rgba(52, 74, 255, 0.34)),
+    transparent 74%
+  );
+}
+
+@keyframes edge-glow-top-left {
+  0%,
+  100% {
+    opacity: var(--glow-rest-opacity);
+    transform: translate3d(-3%, -2%, 0) scale(0.94);
+  }
+
+  50% {
+    opacity: var(--glow-peak-opacity);
+    transform: translate3d(9%, 7%, 0) scale(1.08);
+  }
+}
+
+@keyframes edge-glow-top-right {
+  0%,
+  100% {
+    opacity: var(--glow-rest-opacity);
+    transform: translate3d(4%, -4%, 0) scale(0.96);
+  }
+
+  50% {
+    opacity: var(--glow-peak-opacity);
+    transform: translate3d(-9%, 8%, 0) scale(1.1);
+  }
+}
+
+@keyframes edge-glow-bottom-right {
+  0%,
+  100% {
+    opacity: var(--glow-rest-opacity);
+    transform: translate3d(5%, 5%, 0) scale(0.95);
+  }
+
+  50% {
+    opacity: var(--glow-peak-opacity);
+    transform: translate3d(-10%, -8%, 0) scale(1.09);
+  }
+}
+
 .cosmic-canvas {
   position: absolute;
   inset: 0;
