@@ -127,6 +127,7 @@ type Scene = {
 
 const TAU = Math.PI * 2;
 const STAR_COLOR_FADE_MS = 1500;
+const SECTION_COLOR_EASE_MS = 520;
 const PLANET_VISIBILITY_SLOT_MS = 26_000;
 const PLANET_VISIBILITY_FADE_MS = 2_200;
 const PLANET_SECONDARY_START_MS = 8_500;
@@ -1210,7 +1211,7 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       if (!scene) return;
       const elapsed = clamp(time - previousTime, 0, 64);
       previousTime = time;
-      const colorEase = 1 - Math.exp(-elapsed / 240);
+      const colorEase = 1 - Math.exp(-elapsed / SECTION_COLOR_EASE_MS);
       currentColor[0] += (targetColorRef.current[0] - currentColor[0]) * colorEase;
       currentColor[1] += (targetColorRef.current[1] - currentColor[1]) * colorEase;
       currentColor[2] += (targetColorRef.current[2] - currentColor[2]) * colorEase;
