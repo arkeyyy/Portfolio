@@ -67,7 +67,7 @@ function App() {
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <AnimatedBackground />
+      <AnimatedBackground activeColor={activeTheme.color} />
 
       <div className="relative z-10">
         <Navbar activeSection={activeSection} />

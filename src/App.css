@@ -47,201 +47,33 @@
   overflow: hidden;
   pointer-events: none;
   background:
+    radial-gradient(circle at 50% 62%, color-mix(in srgb, var(--active-color) 4%, transparent), transparent 58%),
     linear-gradient(180deg, color-mix(in srgb, var(--page-bg) 94%, transparent), var(--page-bg));
 }
 
-.ambient-cosmos {
-  position: absolute;
-  inset: -4%;
-  mask-image: radial-gradient(ellipse at 50% 42%, black 20%, rgba(0, 0, 0, 0.84) 68%, transparent 100%);
-  animation: cosmic-field-drift 18s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-.ambient-cosmos::after {
-  position: absolute;
-  inset: 12% -15%;
-  z-index: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 28%,
-    color-mix(in srgb, var(--active-color) 7%, transparent) 45%,
-    color-mix(in srgb, var(--active-color) 3%, transparent) 57%,
-    transparent 73%
-  );
-  filter: blur(32px);
-  transform: rotate(-8deg);
-  transition: background 650ms ease;
-  content: '';
-}
-
-.cosmic-stars {
+.cosmic-canvas {
   position: absolute;
   inset: 0;
   z-index: 1;
-  animation: cosmic-stars-drift 12s ease-in-out infinite alternate;
-}
-
-.cosmic-star {
-  --star-low-opacity: 0.32;
-  --star-high-opacity: 0.76;
-  position: absolute;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow: 0 0 8px 1px currentColor;
-  transition: color 1500ms ease-in-out;
-  animation: cosmic-star-pulse 4.8s ease-in-out infinite;
-}
-
-@keyframes cosmic-field-drift {
-  from {
-    transform: translate3d(-0.6%, -0.4%, 0) scale(1);
-  }
-
-  to {
-    transform: translate3d(0.8%, 0.7%, 0) scale(1.025);
-  }
-}
-
-@keyframes cosmic-stars-drift {
-  from {
-    transform: translate3d(-1.2%, 0.8%, 0);
-  }
-
-  to {
-    transform: translate3d(1.8%, -1.4%, 0);
-  }
-}
-
-@keyframes cosmic-star-pulse {
-  0%,
-  100% {
-    opacity: var(--star-low-opacity);
-    transform: scale(0.82);
-  }
-
-  50% {
-    opacity: var(--star-high-opacity);
-    transform: scale(1.22);
-  }
-}
-
-.ambient-orb {
-  position: absolute;
-  border-radius: 999px;
-  background: var(--active-color);
-  filter: blur(110px) saturate(145%);
-  opacity: 0.15;
-  transition: background-color 650ms ease, opacity 240ms ease;
-  will-change: transform, background-color;
-}
-
-.ambient-orb-one {
-  top: -22vw;
-  left: -15vw;
-  width: 52vw;
-  height: 52vw;
-  animation: ambient-orb-one-drift 18s ease-in-out infinite alternate;
-}
-
-.ambient-orb-two {
-  top: 28%;
-  right: -24vw;
-  width: 48vw;
-  height: 48vw;
-  opacity: 0.11;
-  animation: ambient-orb-two-drift 23s ease-in-out infinite alternate;
-}
-
-.ambient-orb-three {
-  bottom: -30vw;
-  left: 22%;
-  width: 58vw;
-  height: 58vw;
-  opacity: 0.1;
-  animation: ambient-orb-three-drift 28s ease-in-out infinite alternate;
-}
-
-.ambient-orb-four {
-  top: -9vh;
-  right: -9vw;
-  width: clamp(260px, 32vw, 500px);
-  height: clamp(260px, 32vw, 500px);
-  opacity: 0.08;
-  animation: ambient-orb-four-drift 21s ease-in-out infinite alternate;
-}
-
-@keyframes ambient-orb-one-drift {
-  0% {
-    transform: translate3d(-2vw, -2vh, 0) scale(0.96);
-  }
-
-  50% {
-    transform: translate3d(9vw, 7vh, 0) scale(1.05);
-  }
-
-  100% {
-    transform: translate3d(4vw, 15vh, 0) scale(1.1);
-  }
-}
-
-@keyframes ambient-orb-two-drift {
-  0% {
-    transform: translate3d(2vw, -5vh, 0) scale(1.04);
-  }
-
-  50% {
-    transform: translate3d(-11vw, 8vh, 0) scale(0.94);
-  }
-
-  100% {
-    transform: translate3d(-5vw, -10vh, 0) scale(1.08);
-  }
-}
-
-@keyframes ambient-orb-three-drift {
-  0% {
-    transform: translate3d(-8vw, 5vh, 0) scale(0.95);
-  }
-
-  50% {
-    transform: translate3d(7vw, -9vh, 0) scale(1.08);
-  }
-
-  100% {
-    transform: translate3d(13vw, 2vh, 0) scale(1.02);
-  }
-}
-
-@keyframes ambient-orb-four-drift {
-  0% {
-    transform: translate3d(2vw, -2vh, 0) scale(0.94);
-  }
-
-  50% {
-    transform: translate3d(-5vw, 5vh, 0) scale(1.06);
-  }
-
-  100% {
-    transform: translate3d(-2vw, 11vh, 0) scale(1);
-  }
+  display: block;
+  width: 100%;
+  height: 100%;
+  contain: strict;
+  opacity: 0.82;
+  transition: opacity 240ms ease;
 }
 
 .ambient-noise {
   position: absolute;
   inset: 0;
+  z-index: 2;
   opacity: 0.025;
   background-image: repeating-radial-gradient(circle at 0 0, currentColor 0 0.7px, transparent 0.8px 4px);
   background-size: 7px 7px;
 }
 
-.dark .cosmic-star {
-  --star-low-opacity: 0.46;
-  --star-high-opacity: 0.94;
-}
-
-.dark .ambient-orb-one {
-  opacity: 0.14;
+.dark .cosmic-canvas {
+  opacity: 0.96;
 }
 
 /* Navigation */
@@ -1844,14 +1676,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ambient-cosmos,
-  .cosmic-stars,
-  .cosmic-star,
-  .ambient-orb {
-    animation: none;
-    will-change: auto;
-  }
-
   .button:hover,
   .project-card:hover,
   .project-card:focus-within,
