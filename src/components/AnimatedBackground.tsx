@@ -67,6 +67,51 @@ type CloudSprites = {
   lastActiveColor: string;
 };
 
+type CosmicRenderTheme = {
+  neutralStarColor: Rgb;
+  cloudCompositeOperation: 'screen' | 'source-over';
+  backgroundWash: {
+    centerAlpha: number;
+    depthAlpha: number;
+  };
+  fieldStarAlpha: number;
+  ringTrails: {
+    baseAlpha: number;
+    laneFalloff: number;
+    dashAlpha: number;
+  };
+  clouds: {
+    accentAlpha: number;
+    activeAlpha: number;
+    glowCoreAlpha: number;
+    glowMidAlpha: number;
+  };
+  ringParticleAlpha: number;
+  planetRing: {
+    foregroundAlpha: number;
+    backgroundAlpha: number;
+  };
+  planetSurface: {
+    featureAlpha: number;
+    violetStormAlpha: number;
+    rockyShadowAlpha: number;
+    rockyCraterAlpha: number;
+    rockyCraterRimAlpha: number;
+    oceanFeatureAlpha: number;
+    oceanCloudAlpha: number;
+    iceFacetAlpha: number;
+    iceFissureAlpha: number;
+  };
+  planetAtmosphere: {
+    rockyAlpha: number;
+    iceAlpha: number;
+    standardAlpha: number;
+    iceOuterAlpha: number;
+  };
+  planetGradient: readonly [number, number, number, number];
+  rogueTrailAlpha: number;
+};
+
 type Scene = {
   width: number;
   height: number;
@@ -91,6 +136,76 @@ const CLOUD_ACCENT: Rgb = [72, 78, 255];
 const DEEP_SPACE: Rgb = [10, 14, 54];
 const DARK_STAR_NEUTRAL: Rgb = [225, 234, 255];
 const LIGHT_STAR_NEUTRAL: Rgb = [42, 53, 88];
+const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
+  dark: {
+    neutralStarColor: DARK_STAR_NEUTRAL,
+    cloudCompositeOperation: 'screen',
+    backgroundWash: { centerAlpha: 0.12, depthAlpha: 0.065 },
+    fieldStarAlpha: 0.34,
+    ringTrails: { baseAlpha: 0.09, laneFalloff: 0.01, dashAlpha: 0.17 },
+    clouds: {
+      accentAlpha: 0.4,
+      activeAlpha: 0.7,
+      glowCoreAlpha: 0.04,
+      glowMidAlpha: 0.018,
+    },
+    ringParticleAlpha: 0.88,
+    planetRing: { foregroundAlpha: 0.58, backgroundAlpha: 0.34 },
+    planetSurface: {
+      featureAlpha: 0.4,
+      violetStormAlpha: 0.52,
+      rockyShadowAlpha: 0.24,
+      rockyCraterAlpha: 0.5,
+      rockyCraterRimAlpha: 0.34,
+      oceanFeatureAlpha: 0.46,
+      oceanCloudAlpha: 0.48,
+      iceFacetAlpha: 0.24,
+      iceFissureAlpha: 0.72,
+    },
+    planetAtmosphere: {
+      rockyAlpha: 0.2,
+      iceAlpha: 0.68,
+      standardAlpha: 0.44,
+      iceOuterAlpha: 0.24,
+    },
+    planetGradient: [0.84, 0.98, 0.99, 0.99],
+    rogueTrailAlpha: 0.28,
+  },
+  light: {
+    neutralStarColor: LIGHT_STAR_NEUTRAL,
+    cloudCompositeOperation: 'source-over',
+    backgroundWash: { centerAlpha: 0.065, depthAlpha: 0.028 },
+    fieldStarAlpha: 0.28,
+    ringTrails: { baseAlpha: 0.07, laneFalloff: 0.007, dashAlpha: 0.115 },
+    clouds: {
+      accentAlpha: 0.15,
+      activeAlpha: 0.26,
+      glowCoreAlpha: 0.026,
+      glowMidAlpha: 0.012,
+    },
+    ringParticleAlpha: 0.56,
+    planetRing: { foregroundAlpha: 0.42, backgroundAlpha: 0.25 },
+    planetSurface: {
+      featureAlpha: 0.36,
+      violetStormAlpha: 0.46,
+      rockyShadowAlpha: 0.24,
+      rockyCraterAlpha: 0.4,
+      rockyCraterRimAlpha: 0.3,
+      oceanFeatureAlpha: 0.43,
+      oceanCloudAlpha: 0.43,
+      iceFacetAlpha: 0.24,
+      iceFissureAlpha: 0.6,
+    },
+    planetAtmosphere: {
+      rockyAlpha: 0.16,
+      iceAlpha: 0.52,
+      standardAlpha: 0.32,
+      iceOuterAlpha: 0.22,
+    },
+    planetGradient: [0.78, 0.88, 0.92, 0.78],
+    rogueTrailAlpha: 0.2,
+  },
+};
 const BRAND_STAR_COLORS: readonly Rgb[] = [
   [0, 175, 255],
   [255, 183, 0],
@@ -532,7 +647,7 @@ function drawBackgroundWash(
   context: CanvasRenderingContext2D,
   scene: Scene,
   activeColor: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
 ) {
   const { width, height } = scene;
   const centerX = scene.compact ? width * 0.52 : width * 0.48;
@@ -540,8 +655,8 @@ function drawBackgroundWash(
   const radius = Math.max(width, height) * 0.78;
   const wash = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
   const centerColor = mixRgb(DEEP_SPACE, activeColor, 0.24);
-  wash.addColorStop(0, rgba(centerColor, isDark ? 0.12 : 0.024));
-  wash.addColorStop(0.48, rgba(DEEP_SPACE, isDark ? 0.065 : 0.012));
+  wash.addColorStop(0, rgba(centerColor, renderTheme.backgroundWash.centerAlpha));
+  wash.addColorStop(0.48, rgba(DEEP_SPACE, renderTheme.backgroundWash.depthAlpha));
   wash.addColorStop(1, rgba(DEEP_SPACE, 0));
   context.fillStyle = wash;
   context.fillRect(0, 0, width, height);
@@ -552,11 +667,9 @@ function drawFieldStars(
   scene: Scene,
   time: number,
   activeColor: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
 ) {
-  const neutralColor = isDark ? DARK_STAR_NEUTRAL : LIGHT_STAR_NEUTRAL;
-
   for (const star of scene.stars) {
     const motionTime = reducedMotion ? 0 : time;
     const x = star.x * scene.width + Math.sin(motionTime * 0.00022 + star.phase) * 13 * star.depth;
@@ -567,10 +680,10 @@ function drawFieldStars(
       star.colorOffset,
       reducedMotion ? 0 : time,
       activeColor,
-      neutralColor,
+      renderTheme.neutralStarColor,
       star.tintStrength,
     );
-    const alpha = (isDark ? 0.34 : 0.2) * star.depth * twinkle;
+    const alpha = renderTheme.fieldStarAlpha * star.depth * twinkle;
     drawStar(context, x, y, star.size * (0.72 + star.depth * 0.5), color, alpha);
   }
 }
@@ -580,7 +693,7 @@ function drawRingTrails(
   scene: Scene,
   time: number,
   activeColor: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
 ) {
   const { orbit } = scene;
@@ -593,14 +706,17 @@ function drawRingTrails(
     const laneScale = 0.91 + lane * 0.052;
     const trailColor = mixRgb(activeColor, CLOUD_ACCENT, lane * 0.16);
     context.lineWidth = 0.65 + lane * 0.28;
-    context.strokeStyle = rgba(trailColor, isDark ? 0.09 - lane * 0.01 : 0.045 - lane * 0.005);
+    context.strokeStyle = rgba(
+      trailColor,
+      renderTheme.ringTrails.baseAlpha - lane * renderTheme.ringTrails.laneFalloff,
+    );
     context.setLineDash([]);
     context.beginPath();
     context.ellipse(0, 0, orbit.radiusX * laneScale, orbit.radiusY * laneScale, 0, 0, TAU);
     context.stroke();
 
     context.lineWidth = 1.05 + lane * 0.24;
-    context.strokeStyle = rgba(trailColor, isDark ? 0.17 : 0.075);
+    context.strokeStyle = rgba(trailColor, renderTheme.ringTrails.dashAlpha);
     context.setLineDash([
       orbit.radiusX * (0.17 + lane * 0.015),
       orbit.radiusX * 0.055,
@@ -622,7 +738,7 @@ function drawCloudCore(
   scene: Scene,
   time: number,
   activeColor: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
 ) {
   updateActiveCloudTint(scene.clouds, mixRgb(activeColor, CLOUD_ACCENT, 0.16));
@@ -636,11 +752,11 @@ function drawCloudCore(
   const scalePulse = 1 + Math.sin(motionTime * 0.000036) * 0.025;
 
   context.save();
-  context.globalCompositeOperation = isDark ? 'screen' : 'source-over';
+  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
   context.translate(centerX + driftX, centerY + driftY);
   context.rotate(-0.055 + Math.sin(motionTime * 0.000021) * 0.018);
   context.scale(scalePulse, scalePulse);
-  context.globalAlpha = isDark ? 0.4 : 0.085;
+  context.globalAlpha = renderTheme.clouds.accentAlpha;
   context.drawImage(
     scene.clouds.accent,
     -cloudWidth * 0.58,
@@ -648,7 +764,7 @@ function drawCloudCore(
     cloudWidth * 1.16,
     cloudHeight * 1.04,
   );
-  context.globalAlpha = isDark ? 0.7 : 0.155;
+  context.globalAlpha = renderTheme.clouds.activeAlpha;
   context.drawImage(
     scene.clouds.active,
     -cloudWidth * 0.5,
@@ -660,8 +776,11 @@ function drawCloudCore(
 
   const glowRadius = Math.max(cloudWidth * 0.42, 160);
   const glow = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowRadius);
-  glow.addColorStop(0, rgba(mixRgb(activeColor, [120, 170, 255], 0.28), isDark ? 0.04 : 0.018));
-  glow.addColorStop(0.46, rgba(activeColor, isDark ? 0.018 : 0.008));
+  glow.addColorStop(
+    0,
+    rgba(mixRgb(activeColor, [120, 170, 255], 0.28), renderTheme.clouds.glowCoreAlpha),
+  );
+  glow.addColorStop(0.46, rgba(activeColor, renderTheme.clouds.glowMidAlpha));
   glow.addColorStop(1, rgba(activeColor, 0));
   context.fillStyle = glow;
   context.fillRect(centerX - glowRadius, centerY - glowRadius, glowRadius * 2, glowRadius * 2);
@@ -672,10 +791,9 @@ function drawRingParticles(
   scene: Scene,
   time: number,
   activeColor: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
 ) {
-  const neutralColor = isDark ? DARK_STAR_NEUTRAL : LIGHT_STAR_NEUTRAL;
   const { orbit } = scene;
   const cosTilt = Math.cos(orbit.tilt);
   const sinTilt = Math.sin(orbit.tilt);
@@ -695,10 +813,10 @@ function drawRingParticles(
       particle.colorOffset,
       motionTime,
       activeColor,
-      neutralColor,
+      renderTheme.neutralStarColor,
       0.82,
     );
-    const alpha = (isDark ? 0.88 : 0.4) * (0.5 + depth * 0.5) * twinkle;
+    const alpha = renderTheme.ringParticleAlpha * (0.5 + depth * 0.5) * twinkle;
     const size = particle.size * (0.84 + depth * 0.76);
     drawStar(context, x, y, size, color, alpha);
   }
@@ -710,7 +828,7 @@ function drawPlanetRing(
   y: number,
   radius: number,
   color: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
   phase: number,
   foreground: boolean,
 ) {
@@ -720,7 +838,9 @@ function drawPlanetRing(
   context.scale(1, 0.34);
   for (let ring = 0; ring < 3; ring += 1) {
     const ringScale = 0.9 + ring * 0.1;
-    const baseAlpha = foreground ? (isDark ? 0.58 : 0.34) : (isDark ? 0.34 : 0.2);
+    const baseAlpha = foreground
+      ? renderTheme.planetRing.foregroundAlpha
+      : renderTheme.planetRing.backgroundAlpha;
     context.strokeStyle = rgba(color, baseAlpha * (1 - ring * 0.2));
     context.lineWidth = Math.max(0.75, radius * (0.035 + ring * 0.014));
     context.beginPath();
@@ -747,10 +867,11 @@ function drawPlanetSurface(
   featureColor: Rgb,
   highlightColor: Rgb,
   shadowColor: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
   phase: number,
 ) {
-  const featureAlpha = isDark ? 0.4 : 0.31;
+  const { planetSurface } = renderTheme;
+  const featureAlpha = planetSurface.featureAlpha;
   context.save();
   context.translate(x, y);
   context.rotate(-0.14 + phase * 0.035);
@@ -769,7 +890,7 @@ function drawPlanetSurface(
       context.ellipse(0, offsetY, radius * 1.04, radius * (band === 0 ? 0.065 : 0.032), 0, 0, TAU);
       context.fill();
     }
-    context.fillStyle = rgba(highlightColor, isDark ? 0.52 : 0.4);
+    context.fillStyle = rgba(highlightColor, planetSurface.violetStormAlpha);
     context.beginPath();
     context.ellipse(radius * 0.38, radius * 0.12, radius * 0.2, radius * 0.09, -0.08, 0, TAU);
     context.fill();
@@ -785,7 +906,7 @@ function drawPlanetSurface(
       context.fill();
     }
   } else if (kind === 'rocky') {
-    context.fillStyle = rgba(shadowColor, isDark ? 0.24 : 0.2);
+    context.fillStyle = rgba(shadowColor, planetSurface.rockyShadowAlpha);
     context.beginPath();
     context.ellipse(radius * 0.42, 0, radius * 0.7, radius * 1.08, 0.08, 0, TAU);
     context.fill();
@@ -793,28 +914,28 @@ function drawPlanetSurface(
       const craterX = (seededRandom(phase * 17 + crater * 3.7) - 0.5) * radius * 1.2;
       const craterY = (seededRandom(phase * 23 + crater * 5.1) - 0.5) * radius * 1.15;
       const craterRadius = radius * (0.08 + seededRandom(phase * 29 + crater * 7.3) * 0.11);
-      context.fillStyle = rgba(shadowColor, isDark ? 0.5 : 0.34);
+      context.fillStyle = rgba(shadowColor, planetSurface.rockyCraterAlpha);
       context.beginPath();
       context.arc(craterX, craterY, craterRadius, 0, TAU);
       context.fill();
-      context.strokeStyle = rgba(highlightColor, isDark ? 0.34 : 0.26);
+      context.strokeStyle = rgba(highlightColor, planetSurface.rockyCraterRimAlpha);
       context.lineWidth = Math.max(0.45, radius * 0.016);
       context.stroke();
     }
   } else if (kind === 'ocean') {
-    context.fillStyle = rgba(featureColor, isDark ? 0.46 : 0.38);
+    context.fillStyle = rgba(featureColor, planetSurface.oceanFeatureAlpha);
     context.beginPath();
     context.ellipse(-radius * 0.28, -radius * 0.18, radius * 0.34, radius * 0.21, 0.42, 0, TAU);
     context.ellipse(radius * 0.3, radius * 0.22, radius * 0.28, radius * 0.18, -0.3, 0, TAU);
     context.ellipse(radius * 0.18, -radius * 0.5, radius * 0.16, radius * 0.1, 0.16, 0, TAU);
     context.fill();
-    context.strokeStyle = rgba(highlightColor, isDark ? 0.48 : 0.38);
+    context.strokeStyle = rgba(highlightColor, planetSurface.oceanCloudAlpha);
     context.lineWidth = Math.max(0.65, radius * 0.035);
     context.beginPath();
     context.arc(-radius * 0.08, -radius * 0.02, radius * 0.7, 0.18, Math.PI * 0.88);
     context.stroke();
   } else {
-    context.fillStyle = rgba(highlightColor, isDark ? 0.24 : 0.2);
+    context.fillStyle = rgba(highlightColor, planetSurface.iceFacetAlpha);
     for (let facet = 0; facet < 5; facet += 1) {
       const angle = (facet / 5) * TAU;
       context.beginPath();
@@ -827,7 +948,7 @@ function drawPlanetSurface(
       context.closePath();
       if (facet % 2 === 0) context.fill();
     }
-    context.strokeStyle = rgba(featureColor, isDark ? 0.72 : 0.52);
+    context.strokeStyle = rgba(featureColor, planetSurface.iceFissureAlpha);
     context.lineWidth = Math.max(0.65, radius * 0.038);
     context.lineCap = 'round';
     context.beginPath();
@@ -851,7 +972,7 @@ function drawPlanet(
   y: number,
   radius: number,
   activeColor: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
   ringed: boolean,
   phase: number,
   kind: PlanetKind,
@@ -863,12 +984,12 @@ function drawPlanet(
   const featureColor = mixRgb(palette.feature, activeColor, 0.08);
   const rimColor = mixRgb(featureColor, activeColor, 0.28);
   const atmosphereAlpha = kind === 'rocky'
-    ? (isDark ? 0.2 : 0.12)
+    ? renderTheme.planetAtmosphere.rockyAlpha
     : kind === 'ice'
-      ? (isDark ? 0.68 : 0.42)
-      : (isDark ? 0.44 : 0.24);
+      ? renderTheme.planetAtmosphere.iceAlpha
+      : renderTheme.planetAtmosphere.standardAlpha;
 
-  if (ringed) drawPlanetRing(context, x, y, radius, rimColor, isDark, phase, false);
+  if (ringed) drawPlanetRing(context, x, y, radius, rimColor, renderTheme, phase, false);
 
   const gradient = context.createRadialGradient(
     x - radius * 0.32,
@@ -878,10 +999,10 @@ function drawPlanet(
     y,
     radius,
   );
-  gradient.addColorStop(0, rgba(highlightColor, isDark ? 0.84 : 0.68));
-  gradient.addColorStop(0.3, rgba(midColor, isDark ? 0.98 : 0.78));
-  gradient.addColorStop(0.8, rgba(shadowColor, isDark ? 0.99 : 0.82));
-  gradient.addColorStop(1, rgba([2, 4, 18], isDark ? 0.99 : 0.68));
+  gradient.addColorStop(0, rgba(highlightColor, renderTheme.planetGradient[0]));
+  gradient.addColorStop(0.3, rgba(midColor, renderTheme.planetGradient[1]));
+  gradient.addColorStop(0.8, rgba(shadowColor, renderTheme.planetGradient[2]));
+  gradient.addColorStop(1, rgba([2, 4, 18], renderTheme.planetGradient[3]));
   context.fillStyle = gradient;
   context.beginPath();
   context.arc(x, y, radius, 0, TAU);
@@ -896,7 +1017,7 @@ function drawPlanet(
     featureColor,
     highlightColor,
     shadowColor,
-    isDark,
+    renderTheme,
     phase,
   );
 
@@ -907,14 +1028,14 @@ function drawPlanet(
   context.stroke();
 
   if (kind === 'ice') {
-    context.strokeStyle = rgba(featureColor, isDark ? 0.24 : 0.18);
+    context.strokeStyle = rgba(featureColor, renderTheme.planetAtmosphere.iceOuterAlpha);
     context.lineWidth = Math.max(0.6, radius * 0.022);
     context.beginPath();
     context.arc(x, y, radius * 1.16, 0, TAU);
     context.stroke();
   }
 
-  if (ringed) drawPlanetRing(context, x, y, radius, rimColor, isDark, phase, true);
+  if (ringed) drawPlanetRing(context, x, y, radius, rimColor, renderTheme, phase, true);
 }
 
 function drawPlanets(
@@ -922,7 +1043,7 @@ function drawPlanets(
   scene: Scene,
   time: number,
   activeColor: Rgb,
-  isDark: boolean,
+  renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
 ) {
   const planetCount = scene.compact ? 3 : scene.planets.length;
@@ -965,7 +1086,7 @@ function drawPlanets(
       const trailEndX = x - direction * radius * 3.2;
       const trailColor = mixRgb(PLANET_PALETTES[planet.kind].feature, activeColor, 0.16);
       const trail = context.createLinearGradient(x, y, trailEndX, y);
-      trail.addColorStop(0, rgba(trailColor, isDark ? 0.28 : 0.14));
+      trail.addColorStop(0, rgba(trailColor, renderTheme.rogueTrailAlpha));
       trail.addColorStop(1, rgba(trailColor, 0));
       context.strokeStyle = trail;
       context.lineWidth = Math.max(1, radius * 0.1);
@@ -982,7 +1103,7 @@ function drawPlanets(
       y,
       radius,
       activeColor,
-      isDark,
+      renderTheme,
       planet.ringed,
       surfacePhase,
       planet.kind,
@@ -999,15 +1120,16 @@ function drawScene(
   isDark: boolean,
   reducedMotion: boolean,
 ) {
+  const renderTheme = isDark ? COSMIC_RENDER_THEMES.dark : COSMIC_RENDER_THEMES.light;
   context.clearRect(0, 0, scene.width, scene.height);
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = 1;
-  drawBackgroundWash(context, scene, activeColor, isDark);
-  drawFieldStars(context, scene, time, activeColor, isDark, reducedMotion);
-  drawRingTrails(context, scene, time, activeColor, isDark, reducedMotion);
-  drawCloudCore(context, scene, time, activeColor, isDark, reducedMotion);
-  drawRingParticles(context, scene, time, activeColor, isDark, reducedMotion);
-  drawPlanets(context, scene, time, activeColor, isDark, reducedMotion);
+  drawBackgroundWash(context, scene, activeColor, renderTheme);
+  drawFieldStars(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawCloudCore(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawRingParticles(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion);
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
 }

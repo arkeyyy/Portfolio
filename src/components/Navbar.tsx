@@ -5,6 +5,8 @@ import { sectionById, sections } from '../sectionTheme';
 import type { SectionId } from '../sectionTheme';
 
 const THEME_STORAGE_KEY = 'aldrin-portfolio-theme';
+const DARK_THEME_COLOR = '#0b0c0f';
+const LIGHT_THEME_COLOR = '#e9edf7';
 
 function getInitialTheme() {
   try {
@@ -30,7 +32,10 @@ export default function Navbar({ activeSection }: { activeSection: SectionId }) 
     root.style.colorScheme = isDarkMode ? 'dark' : 'light';
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', isDarkMode ? '#0b0c0f' : '#f5f6f7');
+      ?.setAttribute(
+        'content',
+        isDarkMode ? DARK_THEME_COLOR : LIGHT_THEME_COLOR,
+      );
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, isDarkMode ? 'dark' : 'light');
     } catch {
