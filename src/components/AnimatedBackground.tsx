@@ -2170,8 +2170,8 @@ function drawVortex(
   const motionTime = reducedMotion ? 0 : time;
   const vortexWidth = innerRing.radiusX * (scene.compact ? 1.3 : 1.45);
   const vortexHeight = innerRing.radiusY * (scene.compact ? 1.2 : 1.35);
-  const activeRotation = reducedMotion ? 0.18 : 0.18 + motionTime * 0.000017;
-  const accentRotation = reducedMotion ? -0.24 : -0.24 + motionTime * 0.000011;
+  const activeRotation = reducedMotion ? 0.18 : 0.18 + motionTime * 0.000050;
+  const accentRotation = reducedMotion ? -0.24 : -0.24 + motionTime * 0.000023;
   const opacityPulse = reducedMotion
     ? 0.92
     : 0.86 + Math.sin(motionTime * 0.00015 + 0.6) * 0.1;
