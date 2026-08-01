@@ -1,6 +1,6 @@
 <div align="center">
 
-# ✦ Personal Portfolio ✦
+# Personal Portfolio
 
 **A responsive and highly interactive personal portfolio built with modern web technologies.**
 
@@ -24,11 +24,12 @@ I built this portfolio with a dual purpose: to create a centralized hub for my w
 
 ## Features
 
-- **Immersive Background:** An ambient, animated glowing background that smoothly shifts colors based on scroll position.
-- **Glassmorphism UI:** Translucent, blurred cards and components that allow the animated background to shine through seamlessly.
-- **Dynamic Navigation:** Scroll-spy navigation that highlights the active section you are currently viewing.
-- **Responsive Design:** Flawless layout scaling from ultra-wide desktop monitors down to mobile screens.
-- **Interactive Contact Hub:** Direct email, instant mobile dialing (`tel:`), and social links with bespoke hover states.
+- **Section-Aware Color:** The ambient background, progress rail, brand mark, and navigation shift color with the section in view.
+- **Chromatic Glass UI:** Neutral translucent surfaces keep content readable while letting each section's identity come through.
+- **Accessible Navigation:** Scroll-spy feedback, hash links, keyboard focus states, a skip link, and a compact mobile menu.
+- **Responsive Design:** Purpose-built layouts for phones, tablets, laptops, and wide desktop screens.
+- **Theme Support:** Persistent light and dark modes that start from the visitor's system preference.
+- **Interactive Contact Hub:** Direct email, mobile dialing (`tel:`), and clearly labeled social links.
 
 ## Tech Stack Architecture
 

@@ -1,73 +1,77 @@
+import { Award } from 'lucide-react';
 import codechumIcon from '../assets/codechum-icon.png';
 import sololearnIcon from '../assets/sololearn-icon.png';
 import canvaIcon from '../assets/canva-icon.png';
+import SectionHeading from './SectionHeading';
 
+const certifications = [
+  {
+    title: 'C Programming Certification',
+    issuer: 'CodeChum',
+    year: '2024',
+    icon: codechumIcon,
+  },
+  {
+    title: 'Java Object-Oriented Programming Certification Exam',
+    issuer: 'CIT-U · CodeChum',
+    year: '2025',
+    icon: codechumIcon,
+  },
+  {
+    title: 'Introduction to Python Course Certificate',
+    issuer: 'Sololearn',
+    year: '2025',
+    icon: sololearnIcon,
+  },
+  {
+    title: 'Design School Certificate',
+    issuer: 'Canva',
+    year: '2024',
+    icon: canvaIcon,
+  },
+];
 
 export default function CertificationsPage() {
-  const certifications = [
-    { 
-      title: 'CodeChum C Programming Certification', 
-      issuer: 'CodeChum', 
-      year: '2024',
-      icon: codechumIcon
-    },
-    { 
-      title: 'CITU – Java Object-Oriented Programming Certification Exam', 
-      issuer: 'CodeChum', 
-      year: '2025',
-      icon: codechumIcon
-    },
-    { 
-      title: 'Sololearn Introduction to Python Course Certificate', 
-      issuer: 'Sololearn', 
-      year: '2025',
-      icon: sololearnIcon
-    },
-    { 
-      title: 'Canva Design School Certificate', 
-      issuer: 'Canva', 
-      year: '2024',
-      icon: canvaIcon
-    },
-  ];
-
   return (
-    <section id="certifications" className="py-24">
-      <div className="mb-12">
-        <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
-          Certifications
-        </h2>
-        <div className="w-60 h-1 bg-[var(--certifications)] rounded-full"></div>
-      </div>
+    <section id="certifications" className="page-section" aria-labelledby="certifications-title">
+      <SectionHeading
+        id="certifications-title"
+        number="04"
+        eyebrow="Credentials"
+        title="Learning, made tangible."
+        description="Coursework and assessments that sharpened my technical foundation and expanded the way I approach making things."
+        color="var(--certifications-ink)"
+      />
 
-      <div>
-        
-        {/* Flex parent container with wrapping enabled */}
-        <div className="flex flex-col md:flex-row md:flex-wrap -mx-4 gap-y-4">
-          
-          {certifications.map((cert, index) => (
-            // Flex child: 100% width on mobile, 50% width on md screens and up
-            <div key={index} className="w-full md:w-1/2 px-4">
-              
-              <div className="group flex items-start space-x-4 p-4 rounded-xl border-2 hover:border-[var(--certifications)] bg-white hover:bg-[#ededed] dark:bg-zinc-800 dark:hover:bg-zinc-900 transition-colors duration-200 h-full">
-                <div className="mt-1 flex-shrink-0 bg-gray-200 dark:bg-zinc-700 p-2 rounded-full text-gray-500 dark:text-gray-400 dark:group-hover:text-[var(--certifications)] group-hover:text-[var(--certifications)] group-hover:scale-110 group-hover:bg-gray-300 dark:group-hover:bg-zinc-600 transition-all duration-300">
-                  <img src={cert.icon} alt={`${cert.issuer} logo`} className="w-6 h-6" />
-                </div>
-                
-                <div>
-                  <h3 className="text-xl font-semibold text-black dark:text-gray-100 dark:group-hover:text-[var(--certifications)] group-hover:text-[var(--certifications)] transition-colors duration-200">
-                    {cert.title}
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400 mt-1 font-medium">
-                    {cert.issuer} <span className="mx-2 text-gray-600 dark:text-zinc-600">—</span> {cert.year}
-                  </p>
-                </div>
-              </div>
-              
+      <div className="credentials-grid">
+        {certifications.map((certification, index) => (
+          <article key={certification.title} className="credential-card">
+            <div className="credential-logo">
+              <img
+                src={certification.icon}
+                alt=""
+                width="48"
+                height="48"
+                loading="lazy"
+                decoding="async"
+              />
             </div>
-          ))}
-          
-        </div>
+
+            <div className="credential-content">
+              <div className="credential-meta">
+                <span>{certification.issuer}</span>
+                <span aria-hidden="true">·</span>
+                <time>{certification.year}</time>
+              </div>
+              <h3>{certification.title}</h3>
+            </div>
+
+            <div className="credential-mark" aria-hidden="true">
+              <Award aria-hidden="true" />
+              <span>{String(index + 1).padStart(2, '0')}</span>
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );

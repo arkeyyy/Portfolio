@@ -2,9 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icon.png" />
+    <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Suse Portfolio</title>
+    <meta
+      name="description"
+      content="Aldrin Suse's developer portfolio—selected software projects, skills, certifications, education, and contact information."
+    />
+    <meta name="theme-color" content="#0b0c0f" />
+    <title>Aldrin Suse — Developer Portfolio</title>
+    <script>
+      try {
+        const savedTheme = localStorage.getItem('aldrin-portfolio-theme');
+        const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme === 'dark' || (savedTheme === null && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch {
+        // The app will fall back to the system theme when storage is unavailable.
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

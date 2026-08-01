@@ -1,64 +1,80 @@
+import { ArrowDownRight, Download, MapPin } from 'lucide-react';
 import pic from '../assets/pic.jpg';
 
 export default function AboutPage() {
-  const scrollToProjects = () => {
-    const element = document.getElementById('projects');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   return (
-    <section id="about" className="min-h-[calc(100vh-76px)] flex items-center py-20">
-      <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-8 items-center">
-        
-        {/* Left Side: Content */}
-        <div className="order-2 lg:order-1 flex flex-col space-y-6">
-          <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
-            Hi, I'm Aldrin.
-          </h1>
-          
-          <h2 className="text-2xl md:text-3xl text-[var(--about)] font-semibold text-justify">
-            A computer science student building interpreters, web apps, and everything in between...
-          </h2>
-          
-          <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed max-w-2xl text-justify">
-            I'm a 3rd year Computer Science student at Cebu Institute of Technology - University, with a track record of
-            building across different domains. From a full four-phase language interpreter, a public health
-            web app to real-time bus-tracking system. I enjoy solving problems that have a clear real-world impact,
-            and I'm comfortable working across the stack using C, C++, Java, JavaScript, TypeScript, and more.
+    <section id="about" className="page-section hero-section" aria-labelledby="about-title">
+      <div className="hero-layout">
+        <div className="hero-copy">
+          <p className="hero-eyebrow">
+            <span className="status-dot" aria-hidden="true" />
+            Computer Science student
+            <span aria-hidden="true">·</span>
+            <span className="hero-location">
+              <MapPin aria-hidden="true" /> Cebu, Philippines
+            </span>
           </p>
-          
-          <div className="flex flex-wrap gap-4 pt-4">
-            <button 
-              onClick={scrollToProjects}
-              className="bg-[var(--about)] hover:bg-[#52c9ff] border-2 border-black dark:border-white text-white hover:text-black px-8 py-3 rounded-lg font-medium transition-colors duration-200 cursor-pointer flex items-center justify-center"
-            >
-              View Projects
-            </button>
-            
-            <a 
-              href="/SUSE_Resume.pdf" 
-              download
-              className="px-8 py-3 bg-transparent rounded-lg text-black dark:text-white font-medium border-2 border-black dark:border-white hover:bg-black/20 dark:hover:bg-white/20 transition-colors duration-200 flex items-center justify-center"
-            >
-              Download Resume
+
+          <h1 id="about-title" tabIndex={-1}>
+            <span className="hero-greeting">Hi, I&apos;m Aldrin.</span>
+            <span>
+              I turn ideas into <span className="accent-text about-accent">working software.</span>
+            </span>
+          </h1>
+
+          <p className="hero-summary">
+            I build interpreters, web experiences, and practical systems from end to end—pairing
+            sound engineering with a sharp eye for the people using what I create.
+          </p>
+
+          <div className="hero-actions">
+            <a href="#projects" className="button button-primary about-button">
+              Explore my work
+              <ArrowDownRight aria-hidden="true" />
+            </a>
+            <a className="button button-secondary" href="/SUSE_Resume.pdf" download>
+              <Download aria-hidden="true" />
+              Download résumé
             </a>
           </div>
+
+          <dl className="hero-metrics" aria-label="Portfolio highlights">
+            <div>
+              <dt>05</dt>
+              <dd>Selected projects</dd>
+            </div>
+            <div>
+              <dt>10+</dt>
+              <dd>Languages explored</dd>
+            </div>
+            <div>
+              <dt>Full-stack</dt>
+              <dd>Builder mindset</dd>
+            </div>
+          </dl>
         </div>
 
-        {/* Right Side: Image Placeholder */}
-        <div className="order-1 lg:order-2 flex justify-center lg:justify-end">
-          <div className="relative w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-2xl overflow-hidden border-5 border-[var(--about)]/50 bg-gray-200 dark:bg-zinc-900 shadow-xl">
-            {/* Replace the src with your actual image path later, e.g., '/profile.jpg' */}
-            <img 
-              src={pic} 
-              alt="Aldrin" 
-              className="object-cover w-full h-full"
+        <div className="portrait-stage">
+          <div className="portrait-accent-frame" aria-hidden="true" />
+          <figure className="portrait-card">
+            <img
+              src={pic}
+              alt="Portrait of Aldrin Suse outdoors"
+              width="1532"
+              height="1532"
+              decoding="async"
+              fetchPriority="high"
             />
+            <figcaption className="portrait-caption">
+              <span>Current focus</span>
+              <strong>Full-stack systems &amp; thoughtful interfaces</strong>
+            </figcaption>
+          </figure>
+          <div className="portrait-note" aria-hidden="true">
+            <span className="portrait-note-dot" />
+            Building, learning, iterating
           </div>
         </div>
-
       </div>
     </section>
   );
