@@ -97,6 +97,15 @@
   animation: ambient-orb-three-drift 28s ease-in-out infinite alternate;
 }
 
+.ambient-orb-four {
+  top: -9vh;
+  right: -9vw;
+  width: clamp(260px, 32vw, 500px);
+  height: clamp(260px, 32vw, 500px);
+  opacity: 0.08;
+  animation: ambient-orb-four-drift 21s ease-in-out infinite alternate;
+}
+
 @keyframes ambient-orb-one-drift {
   0% {
     transform: translate3d(-2vw, -2vh, 0) scale(0.96);
@@ -136,6 +145,20 @@
 
   100% {
     transform: translate3d(13vw, 2vh, 0) scale(1.02);
+  }
+}
+
+@keyframes ambient-orb-four-drift {
+  0% {
+    transform: translate3d(2vw, -2vh, 0) scale(0.94);
+  }
+
+  50% {
+    transform: translate3d(-5vw, 5vh, 0) scale(1.06);
+  }
+
+  100% {
+    transform: translate3d(-2vw, 11vh, 0) scale(1);
   }
 }
 

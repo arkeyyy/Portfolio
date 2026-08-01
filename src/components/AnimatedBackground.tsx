@@ -5,6 +5,7 @@ export default function AnimatedBackground() {
       <div className="ambient-orb ambient-orb-one" />
       <div className="ambient-orb ambient-orb-two" />
       <div className="ambient-orb ambient-orb-three" />
+      <div className="ambient-orb ambient-orb-four" />
       <div className="ambient-noise" />
     </div>
   );
