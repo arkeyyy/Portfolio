@@ -28,7 +28,6 @@ const skillCategories = [
   {
     title: 'Languages',
     description: 'The foundations I use to reason about systems and solve problems.',
-    className: 'skill-panel-wide',
     skills: [
       { name: 'C', icon: SiC, hoverColor: 'group-hover:text-[#1c73ff]' },
       { name: 'C++', icon: SiCplusplus, hoverColor: 'group-hover:text-[#1c73ff]' },
@@ -45,7 +44,6 @@ const skillCategories = [
   {
     title: 'Frameworks',
     description: 'Tools for shaping reliable web applications and interfaces.',
-    className: '',
     skills: [
       { name: 'React.js', icon: SiReact, hoverColor: 'group-hover:text-[#149ECA]' },
       { name: 'Node.js', icon: SiNodedotjs, hoverColor: 'group-hover:text-[#339933]' },
@@ -57,7 +55,6 @@ const skillCategories = [
   {
     title: 'Databases',
     description: 'Structured and flexible data layers for application work.',
-    className: '',
     skills: [
       { name: 'PostgreSQL', icon: SiPostgresql, hoverColor: 'group-hover:text-[#4169E1]' },
       { name: 'MySQL', icon: SiMysql, hoverColor: 'group-hover:text-[#00758F]' },
@@ -68,7 +65,6 @@ const skillCategories = [
   {
     title: 'Tools & AI',
     description: 'The supporting toolkit behind my design and development workflow.',
-    className: '',
     skills: [
       { name: 'Figma', icon: SiFigma, hoverColor: 'group-hover:text-[#F24E1E]' },
       { name: 'Git & GitHub', icon: SiGithub, hoverColor: 'group-hover:text-[var(--text-primary)]' },
@@ -79,7 +75,6 @@ const skillCategories = [
   {
     title: 'Core Concepts',
     description: 'The patterns and principles I carry from one stack to the next.',
-    className: 'skill-panel-wide',
     skills: [
       { name: 'CRUD', icon: FaDatabase, hoverColor: 'group-hover:text-[var(--skills)]' },
       { name: 'OOP', icon: FaCubes, hoverColor: 'group-hover:text-[var(--skills)]' },
@@ -104,7 +99,7 @@ export default function SkillsPage() {
 
       <div className="skills-grid">
         {skillCategories.map((category, index) => (
-          <article key={category.title} className={`skill-panel ${category.className}`}>
+          <article key={category.title} className="skill-panel">
             <header className="skill-panel-header">
               <span>{String(index + 1).padStart(2, '0')}</span>
               <div>

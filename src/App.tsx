@@ -60,7 +60,6 @@ function App() {
   const shellStyle = {
     '--active-color': activeTheme.color,
     '--active-ink': activeTheme.ink,
-    '--active-contrast': activeTheme.contrast,
   } as CSSProperties;
 
   return (
