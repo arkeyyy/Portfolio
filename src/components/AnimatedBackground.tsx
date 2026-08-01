@@ -64,7 +64,9 @@ type CloudSprites = {
   active: HTMLCanvasElement;
   accent: HTMLCanvasElement;
   activeContext: CanvasRenderingContext2D;
+  accentContext: CanvasRenderingContext2D;
   lastActiveColor: string;
+  lastAccentColor: string;
 };
 
 type CosmicRenderTheme = {
@@ -133,6 +135,7 @@ const PLANET_RARE_START_MS = 13_200;
 const PLANET_RARE_END_MS = 16_000;
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const CLOUD_ACCENT: Rgb = [72, 78, 255];
+const ABOUT_CLOUD_ACCENT: Rgb = [158, 88, 255];
 const DEEP_SPACE: Rgb = [10, 14, 54];
 const DARK_STAR_NEUTRAL: Rgb = [225, 234, 255];
 const LIGHT_STAR_NEUTRAL: Rgb = [42, 53, 88];
@@ -327,6 +330,16 @@ function mixRgb(first: Rgb, second: Rgb, amount: number): Rgb {
   ];
 }
 
+function getNebulaAccentColor(activeColor: Rgb) {
+  const distanceFromAbout = Math.hypot(
+    activeColor[0] - DEFAULT_ACTIVE_COLOR[0],
+    activeColor[1] - DEFAULT_ACTIVE_COLOR[1],
+    activeColor[2] - DEFAULT_ACTIVE_COLOR[2],
+  );
+  const aboutInfluence = smoothstep(clamp(1 - distanceFromAbout / 105, 0, 1));
+  return mixRgb(CLOUD_ACCENT, ABOUT_CLOUD_ACCENT, aboutInfluence);
+}
+
 function parseColor(value: string): Rgb | null {
   const color = value.trim();
   const shortHex = /^#([\da-f])([\da-f])([\da-f])$/i.exec(color);
@@ -488,28 +501,55 @@ function createCloudSprites(): CloudSprites | null {
     active: activeTint.canvas,
     accent: accentTint.canvas,
     activeContext: activeTint.context,
+    accentContext: accentTint.context,
     lastActiveColor: '',
+    lastAccentColor: '',
   };
 }
 
-function updateActiveCloudTint(clouds: CloudSprites, color: Rgb) {
+function updateCloudTint(
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  alpha: HTMLCanvasElement,
+  color: Rgb,
+  lastColor: string,
+) {
   const quantizedColor: Rgb = [
     Math.round(color[0] / 12) * 12,
     Math.round(color[1] / 12) * 12,
     Math.round(color[2] / 12) * 12,
   ];
   const colorKey = `${quantizedColor[0]}-${quantizedColor[1]}-${quantizedColor[2]}`;
-  if (colorKey === clouds.lastActiveColor) return;
+  if (colorKey === lastColor) return lastColor;
 
-  const { activeContext: context, active, alpha } = clouds;
-  context.clearRect(0, 0, active.width, active.height);
+  context.clearRect(0, 0, canvas.width, canvas.height);
   context.globalCompositeOperation = 'source-over';
   context.drawImage(alpha, 0, 0);
   context.globalCompositeOperation = 'source-in';
   context.fillStyle = rgba(quantizedColor, 1);
-  context.fillRect(0, 0, active.width, active.height);
+  context.fillRect(0, 0, canvas.width, canvas.height);
   context.globalCompositeOperation = 'source-over';
-  clouds.lastActiveColor = colorKey;
+  return colorKey;
+}
+
+function updateActiveCloudTint(clouds: CloudSprites, color: Rgb) {
+  clouds.lastActiveColor = updateCloudTint(
+    clouds.active,
+    clouds.activeContext,
+    clouds.alpha,
+    color,
+    clouds.lastActiveColor,
+  );
+}
+
+function updateAccentCloudTint(clouds: CloudSprites, color: Rgb) {
+  clouds.lastAccentColor = updateCloudTint(
+    clouds.accent,
+    clouds.accentContext,
+    clouds.alpha,
+    color,
+    clouds.lastAccentColor,
+  );
 }
 
 function createScene(width: number, height: number, clouds: CloudSprites): Scene {
@@ -741,7 +781,9 @@ function drawCloudCore(
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
 ) {
-  updateActiveCloudTint(scene.clouds, mixRgb(activeColor, CLOUD_ACCENT, 0.16));
+  const nebulaAccentColor = getNebulaAccentColor(activeColor);
+  updateActiveCloudTint(scene.clouds, mixRgb(activeColor, nebulaAccentColor, 0.16));
+  updateAccentCloudTint(scene.clouds, nebulaAccentColor);
   const motionTime = reducedMotion ? 0 : time;
   const centerX = scene.compact ? scene.width * 0.5 : scene.width * 0.46;
   const centerY = scene.compact ? scene.height * 0.61 : scene.height * 0.66;
@@ -778,7 +820,7 @@ function drawCloudCore(
   const glow = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowRadius);
   glow.addColorStop(
     0,
-    rgba(mixRgb(activeColor, [120, 170, 255], 0.28), renderTheme.clouds.glowCoreAlpha),
+    rgba(mixRgb(activeColor, nebulaAccentColor, 0.44), renderTheme.clouds.glowCoreAlpha),
   );
   glow.addColorStop(0.46, rgba(activeColor, renderTheme.clouds.glowMidAlpha));
   glow.addColorStop(1, rgba(activeColor, 0));
