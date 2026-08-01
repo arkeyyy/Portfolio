@@ -65,10 +65,10 @@
   position: absolute;
   border-radius: 999px;
   background: var(--active-color);
-  filter: blur(110px);
-  opacity: 0.13;
+  filter: blur(110px) saturate(145%);
+  opacity: 0.15;
   transition: background-color 650ms ease, opacity 240ms ease;
-  will-change: background-color;
+  will-change: transform, background-color;
 }
 
 .ambient-orb-one {
@@ -76,6 +76,7 @@
   left: -15vw;
   width: 52vw;
   height: 52vw;
+  animation: ambient-orb-one-drift 18s ease-in-out infinite alternate;
 }
 
 .ambient-orb-two {
@@ -83,7 +84,8 @@
   right: -24vw;
   width: 48vw;
   height: 48vw;
-  opacity: 0.09;
+  opacity: 0.11;
+  animation: ambient-orb-two-drift 23s ease-in-out infinite alternate;
 }
 
 .ambient-orb-three {
@@ -91,7 +93,50 @@
   left: 22%;
   width: 58vw;
   height: 58vw;
-  opacity: 0.08;
+  opacity: 0.1;
+  animation: ambient-orb-three-drift 28s ease-in-out infinite alternate;
+}
+
+@keyframes ambient-orb-one-drift {
+  0% {
+    transform: translate3d(-2vw, -2vh, 0) scale(0.96);
+  }
+
+  50% {
+    transform: translate3d(9vw, 7vh, 0) scale(1.05);
+  }
+
+  100% {
+    transform: translate3d(4vw, 15vh, 0) scale(1.1);
+  }
+}
+
+@keyframes ambient-orb-two-drift {
+  0% {
+    transform: translate3d(2vw, -5vh, 0) scale(1.04);
+  }
+
+  50% {
+    transform: translate3d(-11vw, 8vh, 0) scale(0.94);
+  }
+
+  100% {
+    transform: translate3d(-5vw, -10vh, 0) scale(1.08);
+  }
+}
+
+@keyframes ambient-orb-three-drift {
+  0% {
+    transform: translate3d(-8vw, 5vh, 0) scale(0.95);
+  }
+
+  50% {
+    transform: translate3d(7vw, -9vh, 0) scale(1.08);
+  }
+
+  100% {
+    transform: translate3d(13vw, 2vh, 0) scale(1.02);
+  }
 }
 
 .ambient-noise {
@@ -107,7 +152,7 @@
 }
 
 .dark .ambient-orb-one {
-  opacity: 0.12;
+  opacity: 0.14;
 }
 
 /* Navigation */
@@ -1711,6 +1756,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ambient-orb {
+    animation: none;
     will-change: auto;
   }
 
