@@ -90,10 +90,9 @@ export default function SkillsPage() {
     <section id="skills" className="page-section" aria-labelledby="skills-title">
       <SectionHeading
         id="skills-title"
-        number="03"
         eyebrow="Toolkit"
         title="A broad base, used with intention."
-        description="I choose tools around the problem–not the other way around–and stay comfortable moving between low-level logic, data, and interface work."
+        description="My toolkit spans systems programming, application logic, data, and interface development, with each technology chosen to fit the problem."
         color="var(--skills-ink)"
       />
 

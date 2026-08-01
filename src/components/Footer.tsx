@@ -10,7 +10,7 @@ export default function Footer() {
           <span className="footer-mark" aria-hidden="true">AS</span>
           <div>
             <strong>Aldrin Suse</strong>
-            <p>Computer Science student &amp; software builder</p>
+            <p>Computer Science Student &amp; Software Builder</p>
           </div>
         </div>
 

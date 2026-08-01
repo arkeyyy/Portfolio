@@ -1,6 +1,5 @@
 type SectionHeadingProps = {
   id: string;
-  number: string;
   eyebrow: string;
   title: string;
   description: string;
@@ -9,7 +8,6 @@ type SectionHeadingProps = {
 
 export default function SectionHeading({
   id,
-  number,
   eyebrow,
   title,
   description,
@@ -19,8 +17,6 @@ export default function SectionHeading({
     <header className="section-heading">
       <div>
         <p className="section-kicker" style={{ color }}>
-          <span aria-hidden="true">{number}</span>
-          <span className="section-kicker-line" style={{ backgroundColor: color }} />
           {eyebrow}
         </p>
         <h2 id={id} tabIndex={-1}>{title}</h2>

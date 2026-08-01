@@ -8,7 +8,7 @@ export default function AboutPage() {
         <div className="hero-copy">
           <p className="hero-eyebrow">
             <span className="status-dot" aria-hidden="true" />
-            Computer Science student
+            Computer Science Student
             <span aria-hidden="true">·</span>
             <span className="hero-location">
               <MapPin aria-hidden="true" /> Cebu, Philippines
@@ -23,8 +23,7 @@ export default function AboutPage() {
           </h1>
 
           <p className="hero-summary">
-            I build interpreters, web experiences, and practical systems from end to end–pairing
-            sound engineering with a sharp eye for the people using what I create.
+            I’m a 3rd-year Computer Science student at Cebu Institute of Technology - University who creates web experiences and end-to-end systems focused on solving real-world problems.
           </p>
 
           <div className="hero-actions">
@@ -48,8 +47,8 @@ export default function AboutPage() {
               <dd>Languages explored</dd>
             </div>
             <div>
-              <dt>Full-stack</dt>
-              <dd>Builder mindset</dd>
+              <dt>Web + systems</dt>
+              <dd>End-to-end development</dd>
             </div>
           </dl>
         </div>

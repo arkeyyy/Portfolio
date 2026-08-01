@@ -2,6 +2,21 @@ import { ArrowUpRight, Code2 } from 'lucide-react';
 import { FaGithub } from 'react-icons/fa';
 import SectionHeading from './SectionHeading';
 
+const tagTones: Record<string, string> = {
+  TypeScript: 'blue',
+  React: 'cyan',
+  'Node.js': 'green',
+  Kotlin: 'purple',
+  Algorithms: 'amber',
+  Java: 'red',
+  Database: 'neutral',
+  'Abstract Syntax Tree': 'teal',
+  Interpreter: 'indigo',
+  JavaScript: 'amber',
+  'Game Development': 'orange',
+  'Game Design': 'orange',
+};
+
 const projects = [
   {
     id: 1,
@@ -65,7 +80,6 @@ export default function ProjectsPage() {
     <section id="projects" className="page-section" aria-labelledby="projects-title">
       <SectionHeading
         id="projects-title"
-        number="02"
         eyebrow="Selected work"
         title="Projects with a purpose."
         description="A selection of systems, tools, and experiences that pushed me to think across product, interface, and implementation."
@@ -96,7 +110,7 @@ export default function ProjectsPage() {
 
               <ul className="tech-list" aria-label={`${project.title} technologies`}>
                 {project.tags.map((tag) => (
-                  <li key={tag}>{tag}</li>
+                  <li key={tag} data-tone={tagTones[tag] ?? 'neutral'}>{tag}</li>
                 ))}
               </ul>
             </div>

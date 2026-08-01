@@ -8,10 +8,9 @@ export default function EducationPage() {
     <section id="education" className="page-section" aria-labelledby="education-title">
       <SectionHeading
         id="education-title"
-        number="05"
         eyebrow="Education"
-        title="Where the foundation took shape."
-        description="Formal study gives me the theory; projects, collaboration, and experimentation turn it into working knowledge."
+        title="Where foundations took shape."
+        description="My coursework builds a strong theoretical foundation, while projects, collaboration, and experimentation turn concepts into practical skills."
         color="var(--education-ink)"
       />
 
@@ -31,7 +30,7 @@ export default function EducationPage() {
             <p className="education-campus">
               <MapPin aria-hidden="true" /> Cebu City
             </p>
-            <p className="education-school">Cebu Institute of Technology – University</p>
+            <p className="education-school">Cebu Institute of Technology - University</p>
           </div>
         </div>
 

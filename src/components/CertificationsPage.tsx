@@ -36,7 +36,6 @@ export default function CertificationsPage() {
     <section id="certifications" className="page-section" aria-labelledby="certifications-title">
       <SectionHeading
         id="certifications-title"
-        number="04"
         eyebrow="Credentials"
         title="Learning, made tangible."
         description="Coursework and assessments that sharpened my technical foundation and expanded the way I approach making things."

@@ -38,10 +38,9 @@ export default function ContactPage() {
     <section id="contact" className="page-section contact-section" aria-labelledby="contact-title">
       <SectionHeading
         id="contact-title"
-        number="06"
         eyebrow="Connect"
         title="Let’s make something useful."
-        description="Have an opportunity, a project, or simply a good idea to discuss? My inbox is open, and I’d be glad to hear about it."
+        description="Curious about my work or interested in collaborating? Send a message and tell me what you have in mind. I am always open to a good conversation."
         color="var(--contact-ink)"
       />
 
