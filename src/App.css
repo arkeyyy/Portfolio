@@ -71,7 +71,7 @@
 
 .dark .ambient-background {
   background: #12031a;
-  animation: page-bg-fade 5s ease-in-out infinite;
+  animation: page-bg-fade 50s ease-in-out infinite;
 }
 
 .ambient-edge-glows {
