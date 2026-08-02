@@ -273,6 +273,8 @@ const PLANET_SECONDARY_END_MS = 20_500;
 const PLANET_RARE_START_MS = 13_200;
 const PLANET_RARE_END_MS = 16_000;
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
+const FIELD_STAR_GOLD: Rgb = [255, 214, 122];
+const FIELD_STAR_WHITE: Rgb = [255, 250, 244];
 const CLOUD_ACCENT: Rgb = [72, 78, 255];
 const ABOUT_CLOUD_ACCENT: Rgb = [158, 88, 255];
 const FOREGROUND_CLOUD_PURPLE: Rgb = [148, 82, 255];
@@ -591,6 +593,16 @@ function getAnimatedStarColor(
     progress,
   );
   return mixRgb(neutralColor, transitioningColor, tintStrength);
+}
+
+function getAnimatedFieldStarColor(seed: number, offset: number, time: number) {
+  const localTime = time + offset;
+  const segment = Math.floor(localTime / STAR_COLOR_FADE_MS);
+  const progress = smoothstep((localTime % STAR_COLOR_FADE_MS) / STAR_COLOR_FADE_MS);
+  const goldToWhite = seededRandom(seed * 19.7 + segment * 11.3) > 0.5;
+  const startColor = goldToWhite ? FIELD_STAR_GOLD : FIELD_STAR_WHITE;
+  const endColor = goldToWhite ? FIELD_STAR_WHITE : FIELD_STAR_GOLD;
+  return mixRgb(startColor, endColor, progress);
 }
 
 function createCloudAlphaSprite() {
@@ -1423,14 +1435,14 @@ function createScene(
 ): Scene {
   const compact = width < 720;
   const starCount = compact
-    ? clamp(Math.round((width * height) / 5200), 72, 105)
-    : clamp(Math.round((width * height) / 8600), 110, 190);
+    ? clamp(Math.round((width * height) / 4400), 98, 148)
+    : clamp(Math.round((width * height) / 7200), 150, 245);
   const ringParticleCount = compact ? 86 : 168;
   const stars = Array.from({ length: starCount }, (_, index): Star => ({
     x: seededRandom(index * 3.1 + 1),
     y: seededRandom(index * 5.7 + 2),
-    size: 0.45 + seededRandom(index * 7.9 + 3) * 1.65,
-    depth: 0.35 + seededRandom(index * 9.1 + 4) * 0.65,
+    size: 0.28 + seededRandom(index * 7.9 + 3) * 2.15,
+    depth: 0.28 + seededRandom(index * 9.1 + 4) * 0.72,
     phase: seededRandom(index * 11.3 + 5) * TAU,
     colorSeed: index * 1.73 + 0.41,
     colorOffset: seededRandom(index * 13.7 + 6) * STAR_COLOR_FADE_MS,
@@ -1859,7 +1871,6 @@ function drawFieldStars(
   context: CanvasRenderingContext2D,
   scene: Scene,
   time: number,
-  activeColor: Rgb,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
 ) {
@@ -1868,16 +1879,9 @@ function drawFieldStars(
     const x = star.x * scene.width + Math.sin(motionTime * 0.00022 + star.phase) * 13 * star.depth;
     const y = star.y * scene.height + Math.cos(motionTime * 0.00017 + star.phase) * 9 * star.depth;
     const twinkle = reducedMotion ? 0.72 : 0.58 + Math.sin(time * 0.0013 + star.phase) * 0.28;
-    const color = getAnimatedStarColor(
-      star.colorSeed,
-      star.colorOffset,
-      reducedMotion ? 0 : time,
-      activeColor,
-      renderTheme.neutralStarColor,
-      star.tintStrength,
-    );
+    const color = getAnimatedFieldStarColor(star.colorSeed, star.colorOffset, reducedMotion ? 0 : time);
     const alpha = renderTheme.fieldStarAlpha * star.depth * twinkle;
-    drawStar(context, x, y, star.size * (0.72 + star.depth * 0.5), color, alpha);
+    drawStar(context, x, y, star.size * (0.62 + star.depth * 0.84), color, alpha);
   }
 }
 
@@ -2688,7 +2692,7 @@ function drawScene(
     reducedMotion,
   );
   drawStarClusterSprites(context, scene, time, renderTheme, isDark, reducedMotion, 'far');
-  drawFieldStars(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawFieldStars(context, scene, time, renderTheme, reducedMotion);
   drawMainRingAurora(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawSecondaryRingSystem(
