@@ -70,9 +70,8 @@
 }
 
 .dark .ambient-background {
-  background:
-    radial-gradient(circle at 50% 62%, color-mix(in srgb, var(--active-color) 4%, transparent), transparent 58%),
-    linear-gradient(180deg, color-mix(in srgb, var(--page-bg) 94%, transparent), var(--page-bg));
+  background: #12031a;
+  animation: page-bg-fade 5s ease-in-out infinite;
 }
 
 .ambient-edge-glows {
