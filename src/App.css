@@ -196,15 +196,6 @@
   transition: opacity 240ms ease;
 }
 
-.ambient-noise {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  opacity: 0.025;
-  background-image: repeating-radial-gradient(circle at 0 0, currentColor 0 0.7px, transparent 0.8px 4px);
-  background-size: 7px 7px;
-}
-
 .dark .cosmic-canvas {
   opacity: 0.96;
 }
