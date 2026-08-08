@@ -14,6 +14,15 @@ type Star = {
   tintStrength: number;
 };
 
+type GoldStar = {
+  x: number;
+  y: number;
+  size: number;
+  depth: number;
+  phase: number;
+  drift: number;
+};
+
 type RingParticle = {
   angle: number;
   size: number;
@@ -175,6 +184,7 @@ type CosmicRenderTheme = {
     depthAlpha: number;
   };
   fieldStarAlpha: number;
+  goldStarAlpha: number;
   starClusters: {
     baseAlpha: number;
     highlightAlpha: number;
@@ -249,6 +259,7 @@ type Scene = {
   pixelRatio: number;
   compact: boolean;
   stars: Star[];
+  goldStars: GoldStar[];
   starClusters: StarCluster[];
   ringParticles: RingParticle[];
   planets: Planet[];
@@ -290,6 +301,7 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     cloudCompositeOperation: 'screen',
     backgroundWash: { centerAlpha: 0.12, depthAlpha: 0.065 },
     fieldStarAlpha: 0.34,
+    goldStarAlpha: 0.58,
     starClusters: { baseAlpha: 0.86, highlightAlpha: 0.92 },
     ringTrails: { baseAlpha: 0.09, laneFalloff: 0.01, dashAlpha: 0.17 },
     secondaryRings: {
@@ -340,6 +352,7 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     cloudCompositeOperation: 'source-over',
     backgroundWash: { centerAlpha: 0.065, depthAlpha: 0.028 },
     fieldStarAlpha: 0.28,
+    goldStarAlpha: 0.42,
     starClusters: { baseAlpha: 0.58, highlightAlpha: 0.72 },
     ringTrails: { baseAlpha: 0.07, laneFalloff: 0.007, dashAlpha: 0.115 },
     secondaryRings: {
@@ -1424,6 +1437,31 @@ function createVortexStars(count: number) {
   });
 }
 
+function createGoldStars(width: number, height: number, compact: boolean) {
+  const count = compact
+    ? clamp(Math.round((width * height) / 2450), 138, 196)
+    : clamp(Math.round((width * height) / 3300), 236, 372);
+
+  return Array.from({ length: count }, (_, index): GoldStar => {
+    const seed = 12_800 + index * 19.37;
+    const layerSelector = seededRandom(seed + 1.9);
+    const depth = layerSelector < 0.52
+      ? 0.24 + seededRandom(seed + 2.5) * 0.22
+      : layerSelector < 0.84
+        ? 0.5 + seededRandom(seed + 2.5) * 0.2
+        : 0.74 + seededRandom(seed + 2.5) * 0.24;
+
+    return {
+      x: seededRandom(seed + 3.7),
+      y: seededRandom(seed + 5.1),
+      size: 0.42 + depth * 0.86 + seededRandom(seed + 7.3) * 0.48,
+      depth,
+      phase: seededRandom(seed + 9.7) * TAU,
+      drift: 2.5 + depth * 8,
+    };
+  });
+}
+
 function createScene(
   width: number,
   height: number,
@@ -1448,6 +1486,7 @@ function createScene(
     colorOffset: seededRandom(index * 13.7 + 6) * STAR_COLOR_FADE_MS,
     tintStrength: 0.28 + seededRandom(index * 15.1 + 7) * 0.72,
   }));
+  const goldStars = createGoldStars(width, height, compact);
   const ringParticles = Array.from(
     { length: ringParticleCount },
     (_, index): RingParticle => ({
@@ -1612,6 +1651,7 @@ function createScene(
     pixelRatio,
     compact,
     stars,
+    goldStars,
     starClusters,
     ringParticles,
     planets,
@@ -1882,6 +1922,46 @@ function drawFieldStars(
     const color = getAnimatedFieldStarColor(star.colorSeed, star.colorOffset, reducedMotion ? 0 : time);
     const alpha = renderTheme.fieldStarAlpha * star.depth * twinkle;
     drawStar(context, x, y, star.size * (0.62 + star.depth * 0.84), color, alpha);
+  }
+}
+
+function drawGoldStars(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  renderTheme: CosmicRenderTheme,
+  reducedMotion: boolean,
+) {
+  const motionTime = reducedMotion ? 0 : time;
+  const deepGold: Rgb = [232, 183, 82];
+  const warmGold: Rgb = [255, 218, 132];
+  const warmWhite: Rgb = [255, 246, 218];
+
+  for (const star of scene.goldStars) {
+    const x = star.x * scene.width + Math.sin(motionTime * 0.00016 + star.phase) * star.drift;
+    const y = star.y * scene.height + Math.cos(motionTime * 0.00012 + star.phase) * star.drift * 0.65;
+    const sparkle = reducedMotion
+      ? 0.82
+      : 0.72 + Math.sin(time * 0.00155 + star.phase) * 0.2;
+    const alpha = renderTheme.goldStarAlpha * (0.52 + star.depth * 0.48) * sparkle;
+    const size = star.size * (0.88 + sparkle * 0.16);
+    const color = mixRgb(deepGold, warmGold, star.depth);
+
+    if (star.depth > 0.76 && sparkle > 0.82) {
+      const arm = size * (1.45 + sparkle * 0.55);
+      const armWidth = Math.max(0.24, size * 0.2);
+      context.fillStyle = rgba(color, alpha * 0.26);
+      context.fillRect(x - arm, y - armWidth * 0.5, arm * 2, armWidth);
+      context.fillRect(x - armWidth * 0.5, y - arm, armWidth, arm * 2);
+    }
+
+    const coreSize = Math.max(0.48, size * 0.64);
+    context.fillStyle = rgba(color, alpha * 0.42);
+    context.beginPath();
+    context.arc(x, y, size * 1.38, 0, TAU);
+    context.fill();
+    context.fillStyle = rgba(warmWhite, alpha * (0.74 + star.depth * 0.26));
+    context.fillRect(x - coreSize * 0.5, y - coreSize * 0.5, coreSize, coreSize);
   }
 }
 
@@ -2693,6 +2773,7 @@ function drawScene(
   );
   drawStarClusterSprites(context, scene, time, renderTheme, isDark, reducedMotion, 'far');
   drawFieldStars(context, scene, time, renderTheme, reducedMotion);
+  drawGoldStars(context, scene, time, renderTheme, reducedMotion);
   drawMainRingAurora(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawSecondaryRingSystem(
