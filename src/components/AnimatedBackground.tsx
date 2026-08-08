@@ -97,6 +97,16 @@ type RoguePlanet = PlanetBase & {
 };
 
 type Planet = OrbitingPlanet | RoguePlanet;
+type PlanetMotion = Planet['motion'];
+type PlanetLayer = PlanetMotion | 'distant-rogue';
+
+type PlanetRenderState = {
+  planet: Planet;
+  x: number;
+  y: number;
+  radius: number;
+  surfacePhase: number;
+};
 
 type OrbitGeometry = {
   centerX: number;
@@ -277,12 +287,6 @@ type Scene = {
 const TAU = Math.PI * 2;
 const STAR_COLOR_FADE_MS = 1500;
 const SECTION_COLOR_EASE_MS = 520;
-const PLANET_VISIBILITY_SLOT_MS = 26_000;
-const PLANET_VISIBILITY_FADE_MS = 2_200;
-const PLANET_SECONDARY_START_MS = 8_500;
-const PLANET_SECONDARY_END_MS = 20_500;
-const PLANET_RARE_START_MS = 13_200;
-const PLANET_RARE_END_MS = 16_000;
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const FIELD_STAR_GOLD: Rgb = [255, 214, 122];
 const FIELD_STAR_WHITE: Rgb = [255, 250, 244];
@@ -467,61 +471,6 @@ function snapToPixel(value: number, pixelRatio: number) {
 
 function smoothstep(value: number) {
   return value * value * (3 - 2 * value);
-}
-
-function getWindowOpacity(time: number, start: number, end: number, fadeDuration: number) {
-  const fadeIn = smoothstep(clamp((time - start) / fadeDuration, 0, 1));
-  const fadeOut = 1 - smoothstep(clamp((time - (end - fadeDuration)) / fadeDuration, 0, 1));
-  return Math.min(fadeIn, fadeOut);
-}
-
-function getPlanetVisibility(
-  index: number,
-  planetCount: number,
-  time: number,
-  reducedMotion: boolean,
-) {
-  if (reducedMotion) return index < Math.min(2, planetCount) ? 1 : 0;
-
-  const slotIndex = Math.floor(time / PLANET_VISIBILITY_SLOT_MS);
-  const slotTime = time % PLANET_VISIBILITY_SLOT_MS;
-  const primaryIndex = slotIndex % planetCount;
-  const previousIndex = (primaryIndex - 1 + planetCount) % planetCount;
-  const secondaryIndex = (primaryIndex + 2) % planetCount;
-  const rareIndex = (primaryIndex + 4) % planetCount;
-  const primaryFade = smoothstep(clamp(slotTime / PLANET_VISIBILITY_FADE_MS, 0, 1));
-
-  let opacity = index === primaryIndex ? primaryFade : 0;
-  if (index === previousIndex && slotTime < PLANET_VISIBILITY_FADE_MS) {
-    opacity = Math.max(opacity, 1 - primaryFade);
-  }
-
-  if (index === secondaryIndex) {
-    opacity = Math.max(
-      opacity,
-      getWindowOpacity(
-        slotTime,
-        PLANET_SECONDARY_START_MS,
-        PLANET_SECONDARY_END_MS,
-        PLANET_VISIBILITY_FADE_MS,
-      ),
-    );
-  }
-
-  const isRareOverlap = slotIndex % 7 === 2;
-  if (isRareOverlap && index === rareIndex) {
-    opacity = Math.max(
-      opacity,
-      getWindowOpacity(
-        slotTime,
-        PLANET_RARE_START_MS,
-        PLANET_RARE_END_MS,
-        PLANET_VISIBILITY_FADE_MS * 0.45,
-      ),
-    );
-  }
-
-  return opacity;
 }
 
 function rgba(color: Rgb, alpha: number) {
@@ -1504,7 +1453,7 @@ function createScene(
       motion: 'rogue',
       x: 0.91,
       y: 0.25,
-      size: compact ? 0.054 : 0.09,
+      size: compact ? 0.034 : 0.048,
       velocityX: -0.014,
       waveY: 24,
       waveSpeed: 0.00009,
@@ -2664,28 +2613,17 @@ function drawPlanet(
   if (ringed) drawPlanetRing(context, x, y, radius, rimColor, renderTheme, phase, true);
 }
 
-function drawPlanets(
-  context: CanvasRenderingContext2D,
+function getPlanetRenderStates(
   scene: Scene,
   time: number,
-  activeColor: Rgb,
-  renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
 ) {
-  const planetCount = scene.compact ? 3 : scene.planets.length;
   const minDimension = Math.min(scene.width, scene.height);
   const motionTime = reducedMotion ? 0 : time;
   const { orbit } = scene;
   const cosTilt = Math.cos(orbit.tilt);
   const sinTilt = Math.sin(orbit.tilt);
-
-  for (let index = 0; index < planetCount; index += 1) {
-    const planet = scene.planets[index];
-    const visibility = getPlanetVisibility(index, planetCount, time, reducedMotion);
-    if (visibility <= 0.01) continue;
-
-    context.save();
-    context.globalAlpha *= visibility;
+  const states = scene.planets.map((planet): PlanetRenderState => {
     const surfacePhase = planet.phase + motionTime * planet.spinSpeed;
     let x: number;
     let y: number;
@@ -2693,7 +2631,7 @@ function drawPlanets(
 
     if (planet.motion === 'orbit') {
       const angle = planet.angle + motionTime * planet.speed * planet.direction;
-      const laneScale = 0.84 + planet.lane * 0.085;
+      const laneScale = 0.5 + planet.lane * 0.33;
       const localX = Math.cos(angle) * orbit.radiusX * laneScale;
       const localY = Math.sin(angle) * orbit.radiusY * laneScale;
       x = orbit.centerX + localX * cosTilt - localY * sinTilt;
@@ -2707,7 +2645,68 @@ function drawPlanets(
       x = ((travelledX % travelWidth) + travelWidth) % travelWidth - offscreenMargin;
       y = planet.y * scene.height
         + Math.sin(planet.phase + motionTime * planet.waveSpeed) * planet.waveY;
+    }
 
+    return { planet, x, y, radius, surfacePhase };
+  });
+
+  const collisionPadding = minDimension * 0.016;
+  for (let pass = 0; pass < 4; pass += 1) {
+    for (let firstIndex = 0; firstIndex < states.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < states.length; secondIndex += 1) {
+        const first = states[firstIndex];
+        const second = states[secondIndex];
+        let deltaX = second.x - first.x;
+        let deltaY = second.y - first.y;
+        let distance = Math.hypot(deltaX, deltaY);
+        const firstClearance = first.radius * (first.planet.ringed ? 1.5 : 1.08);
+        const secondClearance = second.radius * (second.planet.ringed ? 1.5 : 1.08);
+        const minimumDistance = firstClearance + secondClearance + collisionPadding;
+        if (distance >= minimumDistance) continue;
+
+        if (distance < 0.001) {
+          const fallbackAngle = seededRandom(firstIndex * 31 + secondIndex * 47 + 8.3) * TAU;
+          deltaX = Math.cos(fallbackAngle);
+          deltaY = Math.sin(fallbackAngle);
+          distance = 1;
+        }
+
+        const correction = (minimumDistance - distance) * 0.52;
+        const normalX = deltaX / distance;
+        const normalY = deltaY / distance;
+        first.x -= normalX * correction;
+        first.y -= normalY * correction;
+        second.x += normalX * correction;
+        second.y += normalY * correction;
+      }
+    }
+  }
+
+  return states;
+}
+
+function drawPlanets(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  activeColor: Rgb,
+  renderTheme: CosmicRenderTheme,
+  reducedMotion: boolean,
+  layer: PlanetLayer,
+) {
+  const states = getPlanetRenderStates(scene, time, reducedMotion);
+
+  for (const { planet, x, y, radius, surfacePhase } of states) {
+    const belongsToLayer = layer === 'distant-rogue'
+      ? planet.motion === 'rogue' && planet.kind === 'violet'
+      : layer === 'rogue'
+        ? planet.motion === 'rogue' && planet.kind !== 'violet'
+        : planet.motion === 'orbit';
+    if (!belongsToLayer) continue;
+    context.save();
+    if (layer === 'distant-rogue') context.globalAlpha *= 0.72;
+
+    if (planet.motion === 'rogue') {
       const direction = Math.sign(planet.velocityX) || 1;
       const trailEndX = x - direction * radius * 3.2;
       const trailColor = mixRgb(PLANET_PALETTES[planet.kind].feature, activeColor, 0.16);
@@ -2751,6 +2750,7 @@ function drawScene(
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = 1;
   drawBackgroundWash(context, scene, activeColor, renderTheme);
+  drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion, 'distant-rogue');
   drawQuasar(context, scene, time, renderTheme, reducedMotion);
   drawSecondaryRingSystem(
     context,
@@ -2774,6 +2774,7 @@ function drawScene(
   drawStarClusterSprites(context, scene, time, renderTheme, isDark, reducedMotion, 'far');
   drawFieldStars(context, scene, time, renderTheme, reducedMotion);
   drawGoldStars(context, scene, time, renderTheme, reducedMotion);
+  drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion, 'rogue');
   drawMainRingAurora(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawSecondaryRingSystem(
@@ -2801,7 +2802,7 @@ function drawScene(
   drawStarClusterHighlights(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawRingParticles(context, scene, time, activeColor, renderTheme, reducedMotion);
   drawForegroundClouds(context, scene, time, activeColor, renderTheme, reducedMotion);
-  drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion);
+  drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion, 'orbit');
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
 }
@@ -2835,6 +2836,7 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     let resizeFrame = 0;
     let lastPaintTime = 0;
     let previousTime = performance.now();
+    let sceneTime = 0;
     let isDark = document.documentElement.classList.contains('dark');
     let reducedMotion = motionPreference.matches;
     const currentColor: Rgb = [...targetColorRef.current];
@@ -2843,11 +2845,12 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       if (!scene) return;
       const elapsed = clamp(time - previousTime, 0, 64);
       previousTime = time;
+      sceneTime += elapsed;
       const colorEase = 1 - Math.exp(-elapsed / SECTION_COLOR_EASE_MS);
       currentColor[0] += (targetColorRef.current[0] - currentColor[0]) * colorEase;
       currentColor[1] += (targetColorRef.current[1] - currentColor[1]) * colorEase;
       currentColor[2] += (targetColorRef.current[2] - currentColor[2]) * colorEase;
-      drawScene(context, scene, time, currentColor, isDark, reducedMotion);
+      drawScene(context, scene, sceneTime, currentColor, isDark, reducedMotion);
     };
 
     const animate = (time: number) => {
