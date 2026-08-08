@@ -23,6 +23,53 @@
     --active-ink 1200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+html.background-view-active,
+html.background-view-active body {
+  overflow: hidden;
+}
+
+.site-interface {
+  position: relative;
+  z-index: 10;
+}
+
+.site-content {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 460ms ease,
+    visibility 0s linear;
+}
+
+.portfolio-shell.is-interface-hidden .site-nav {
+  opacity: 0;
+  transform: translateY(calc(-100% - 24px));
+  pointer-events: none;
+}
+
+.portfolio-shell.is-interface-hidden .site-content,
+.portfolio-shell.is-interface-hidden .skip-link {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.portfolio-shell.is-interface-hidden .site-content {
+  transition:
+    opacity 460ms ease,
+    visibility 0s linear 460ms;
+}
+
+.interface-status {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .content-frame,
 .footer-frame,
 .nav-frame {
@@ -206,6 +253,12 @@
   top: 0;
   z-index: 50;
   padding-top: 12px;
+  opacity: 1;
+  transform: translateY(0);
+  will-change: transform, opacity;
+  transition:
+    transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms ease;
 }
 
 .nav-frame {

@@ -15,6 +15,7 @@ import type { SectionId } from './sectionTheme';
 
 function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('about');
+  const [isInterfaceHidden, setIsInterfaceHidden] = useState(false);
 
   useEffect(() => {
     const observerOptions = {
@@ -56,6 +57,34 @@ function App() {
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('background-view-active', isInterfaceHidden);
+
+    if (!isInterfaceHidden) {
+      return () => root.classList.remove('background-view-active');
+    }
+
+    const revealFromClick = (event: MouseEvent) => {
+      if (event.button === 0) setIsInterfaceHidden(false);
+    };
+    const revealFromKeyboard = (event: KeyboardEvent) => {
+      if (event.key === ' ' || event.key.startsWith('Arrow') || event.key === 'PageDown' || event.key === 'PageUp') {
+        event.preventDefault();
+      }
+      setIsInterfaceHidden(false);
+    };
+
+    window.addEventListener('click', revealFromClick, true);
+    window.addEventListener('keydown', revealFromKeyboard, true);
+
+    return () => {
+      root.classList.remove('background-view-active');
+      window.removeEventListener('click', revealFromClick, true);
+      window.removeEventListener('keydown', revealFromKeyboard, true);
+    };
+  }, [isInterfaceHidden]);
+
   const activeTheme = sectionById[activeSection];
   const shellStyle = {
     '--active-color': activeTheme.color,
@@ -63,26 +92,44 @@ function App() {
   } as CSSProperties;
 
   return (
-    <div className="portfolio-shell" style={shellStyle}>
+    <div
+      className={`portfolio-shell ${isInterfaceHidden ? 'is-interface-hidden' : ''}`}
+      style={shellStyle}
+    >
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
       <AnimatedBackground activeColor={activeTheme.color} />
 
-      <div className="relative z-10">
-        <Navbar activeSection={activeSection} />
+      <div
+        className="site-interface"
+        aria-hidden={isInterfaceHidden}
+        inert={isInterfaceHidden ? true : undefined}
+      >
+        <Navbar
+          activeSection={activeSection}
+          onHideInterface={() => setIsInterfaceHidden(true)}
+        />
 
-        <main id="main-content" className="content-frame" tabIndex={-1}>
-          <AboutPage />
-          <ProjectsPage />
-          <SkillsPage />
-          <CertificationsPage />
-          <EducationPage />
-          <ContactPage />
-        </main>
+        <div className="site-content">
+          <main id="main-content" className="content-frame" tabIndex={-1}>
+            <AboutPage />
+            <ProjectsPage />
+            <SkillsPage />
+            <CertificationsPage />
+            <EducationPage />
+            <ContactPage />
+          </main>
 
-        <Footer />
+          <Footer />
+        </div>
       </div>
+
+      <p className="interface-status" role="status" aria-live="polite">
+        {isInterfaceHidden
+          ? 'Interface hidden. Click or press any key to restore it.'
+          : ''}
+      </p>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Menu, Moon, Sun, X } from 'lucide-react';
+import { Eye, Menu, Moon, Sun, X } from 'lucide-react';
 import { sectionById, sections } from '../sectionTheme';
 import type { SectionId } from '../sectionTheme';
 
@@ -19,7 +19,12 @@ function getInitialTheme() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-export default function Navbar({ activeSection }: { activeSection: SectionId }) {
+type NavbarProps = {
+  activeSection: SectionId;
+  onHideInterface: () => void;
+};
+
+export default function Navbar({ activeSection, onHideInterface }: NavbarProps) {
   const [isDarkMode, setIsDarkMode] = useState(getInitialTheme);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -127,6 +132,21 @@ export default function Navbar({ activeSection }: { activeSection: SectionId }) 
               title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {isDarkMode ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={(event) => {
+                event.currentTarget.blur();
+                setIsMenuOpen(false);
+                onHideInterface();
+              }}
+              className="icon-button"
+              style={{ color: activeTheme.ink }}
+              aria-label="Hide interface and view the background"
+              title="View background"
+            >
+              <Eye aria-hidden="true" />
             </button>
 
             <button
