@@ -3613,7 +3613,10 @@ function drawScene(
     DEPTH_FIELD_LAYERS.mainRing,
   );
   updateSceneCloudTints(scene.clouds, activeColor);
-  context.clearRect(0, 0, scene.width, scene.height);
+  context.save();
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+  context.restore();
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = 1;
   drawBackgroundWash(context, scene, activeColor, renderTheme);
@@ -3894,15 +3897,28 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     };
 
     const resize = () => {
-      const width = Math.max(1, Math.round(canvas.clientWidth));
-      const height = Math.max(1, Math.round(canvas.clientHeight));
+      const renderWidth = Math.max(1, Math.round(canvas.clientWidth));
+      const renderHeight = Math.max(1, Math.round(canvas.clientHeight));
+      const width = Math.max(1, Math.round(background.clientWidth));
+      const height = Math.max(1, Math.round(background.clientHeight));
+      const renderOffsetX = Math.max(0, (renderWidth - width) * 0.5);
+      const renderOffsetY = Math.max(0, (renderHeight - height) * 0.5);
       const dprLimit = coarsePointer.matches ? 1.25 : 1.5;
       const maxBackingPixels = coarsePointer.matches ? 3_000_000 : 6_000_000;
-      const pixelBudgetRatio = Math.sqrt(maxBackingPixels / (width * height));
+      const pixelBudgetRatio = Math.sqrt(
+        maxBackingPixels / (renderWidth * renderHeight),
+      );
       const dpr = Math.min(window.devicePixelRatio || 1, dprLimit, pixelBudgetRatio);
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      canvas.width = Math.round(renderWidth * dpr);
+      canvas.height = Math.round(renderHeight * dpr);
+      context.setTransform(
+        dpr,
+        0,
+        0,
+        dpr,
+        renderOffsetX * dpr,
+        renderOffsetY * dpr,
+      );
       scene = createScene(
         width,
         height,

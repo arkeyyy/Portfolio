@@ -125,6 +125,7 @@ html.background-view-active body {
 
 /* Ambient, section-aware background */
 .ambient-background {
+  --cosmic-canvas-overscan: clamp(72px, 8vmax, 180px);
   --edge-glow-depth-shift-x: 0px;
   --edge-glow-depth-shift-y: 0px;
   --edge-glow-depth-rotate-x: 0deg;
@@ -155,7 +156,7 @@ html.background-view-active body {
   position: absolute;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
+  overflow: visible;
   transform: perspective(1400px)
     translate3d(
       var(--edge-glow-depth-shift-x),
@@ -293,11 +294,16 @@ html.background-view-active body {
 
 .cosmic-canvas {
   position: absolute;
-  inset: 0;
+  top: calc(0px - var(--cosmic-canvas-overscan));
+  left: calc(0px - var(--cosmic-canvas-overscan));
   z-index: 1;
   display: block;
-  width: 100%;
-  height: 100%;
+  width: calc(
+    100% + var(--cosmic-canvas-overscan) + var(--cosmic-canvas-overscan)
+  );
+  height: calc(
+    100% + var(--cosmic-canvas-overscan) + var(--cosmic-canvas-overscan)
+  );
   contain: strict;
   opacity: 0.92;
   transition: opacity 240ms ease;
