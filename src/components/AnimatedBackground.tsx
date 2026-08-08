@@ -284,9 +284,27 @@ type Scene = {
   vortex: Vortex;
 };
 
+type HorizontalParallaxFrame = {
+  position: number;
+  maximumOffset: number;
+};
+
 const TAU = Math.PI * 2;
 const STAR_COLOR_FADE_MS = 1500;
 const SECTION_COLOR_EASE_MS = 520;
+const HORIZONTAL_PARALLAX_EASE_MS = 260;
+// Depth 0 stays fixed. Depth 1 receives the full foreground camera offset.
+// New scene objects can use a semantic token here or pass a custom depth to the helper.
+const HORIZONTAL_PARALLAX_DEPTH = {
+  distant: 0.16,
+  far: 0.24,
+  middle: 0.42,
+  near: 0.58,
+  foreground: 0.78,
+  starField: 0.24,
+  goldStars: 0.32,
+  starClusters: 0.44,
+} as const;
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const FIELD_STAR_GOLD: Rgb = [255, 214, 122];
 const FIELD_STAR_WHITE: Rgb = [255, 250, 244];
@@ -463,6 +481,41 @@ function seededRandom(seed: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function createHorizontalParallaxFrame(
+  scene: Scene,
+  position: number,
+): HorizontalParallaxFrame {
+  return {
+    position: clamp(position, -1, 1),
+    maximumOffset: clamp(scene.width * 0.03, 18, 44),
+  };
+}
+
+function getHorizontalParallaxOffset(
+  parallax: HorizontalParallaxFrame,
+  depth: number,
+) {
+  return -parallax.position * parallax.maximumOffset * clamp(depth, 0, 1);
+}
+
+function drawAtHorizontalDepth(
+  context: CanvasRenderingContext2D,
+  parallax: HorizontalParallaxFrame,
+  depth: number,
+  draw: () => void,
+) {
+  const offsetX = getHorizontalParallaxOffset(parallax, depth);
+  if (Math.abs(offsetX) < 0.01) {
+    draw();
+    return;
+  }
+
+  context.save();
+  context.translate(offsetX, 0);
+  draw();
+  context.restore();
 }
 
 function snapToPixel(value: number, pixelRatio: number) {
@@ -1796,12 +1849,20 @@ function drawStarClusterSprites(
   isDark: boolean,
   reducedMotion: boolean,
   layer: ClusterLayer,
+  parallax: HorizontalParallaxFrame,
 ) {
   context.save();
   for (const cluster of scene.starClusters) {
     if (cluster.layer !== layer) continue;
     const [driftX, driftY, opacityPulse] = getStarClusterMotion(cluster, time, reducedMotion);
-    const x = snapToPixel(cluster.centerX - cluster.width * 0.5 + driftX, scene.pixelRatio);
+    const parallaxX = getHorizontalParallaxOffset(
+      parallax,
+      cluster.depth * HORIZONTAL_PARALLAX_DEPTH.starClusters,
+    );
+    const x = snapToPixel(
+      cluster.centerX - cluster.width * 0.5 + driftX + parallaxX,
+      scene.pixelRatio,
+    );
     const y = snapToPixel(cluster.centerY - cluster.height * 0.5 + driftY, scene.pixelRatio);
     const sprite = isDark ? cluster.darkSprite : cluster.lightSprite;
     context.globalAlpha = renderTheme.starClusters.baseAlpha * opacityPulse;
@@ -1827,11 +1888,20 @@ function drawStarClusterHighlights(
   activeColor: Rgb,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
+  layer: ClusterLayer,
+  parallax: HorizontalParallaxFrame,
 ) {
   const motionTime = reducedMotion ? 0 : time;
   for (const cluster of scene.starClusters) {
+    if (cluster.layer !== layer) continue;
     const [driftX, driftY] = getStarClusterMotion(cluster, time, reducedMotion);
-    const originX = cluster.centerX - cluster.width * 0.5 + driftX;
+    const originX = cluster.centerX
+      - cluster.width * 0.5
+      + driftX
+      + getHorizontalParallaxOffset(
+        parallax,
+        cluster.depth * HORIZONTAL_PARALLAX_DEPTH.starClusters,
+      );
     const originY = cluster.centerY - cluster.height * 0.5 + driftY;
 
     for (const highlight of cluster.highlights) {
@@ -1862,10 +1932,16 @@ function drawFieldStars(
   time: number,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
+  parallax: HorizontalParallaxFrame,
 ) {
   for (const star of scene.stars) {
     const motionTime = reducedMotion ? 0 : time;
-    const x = star.x * scene.width + Math.sin(motionTime * 0.00022 + star.phase) * 13 * star.depth;
+    const x = star.x * scene.width
+      + Math.sin(motionTime * 0.00022 + star.phase) * 13 * star.depth
+      + getHorizontalParallaxOffset(
+        parallax,
+        star.depth * HORIZONTAL_PARALLAX_DEPTH.starField,
+      );
     const y = star.y * scene.height + Math.cos(motionTime * 0.00017 + star.phase) * 9 * star.depth;
     const twinkle = reducedMotion ? 0.72 : 0.58 + Math.sin(time * 0.0013 + star.phase) * 0.28;
     const color = getAnimatedFieldStarColor(star.colorSeed, star.colorOffset, reducedMotion ? 0 : time);
@@ -1880,6 +1956,7 @@ function drawGoldStars(
   time: number,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
+  parallax: HorizontalParallaxFrame,
 ) {
   const motionTime = reducedMotion ? 0 : time;
   const deepGold: Rgb = [232, 183, 82];
@@ -1887,7 +1964,12 @@ function drawGoldStars(
   const warmWhite: Rgb = [255, 246, 218];
 
   for (const star of scene.goldStars) {
-    const x = star.x * scene.width + Math.sin(motionTime * 0.00016 + star.phase) * star.drift;
+    const x = star.x * scene.width
+      + Math.sin(motionTime * 0.00016 + star.phase) * star.drift
+      + getHorizontalParallaxOffset(
+        parallax,
+        star.depth * HORIZONTAL_PARALLAX_DEPTH.goldStars,
+      );
     const y = star.y * scene.height + Math.cos(motionTime * 0.00012 + star.phase) * star.drift * 0.65;
     const sparkle = reducedMotion
       ? 0.82
@@ -2617,6 +2699,7 @@ function getPlanetRenderStates(
   scene: Scene,
   time: number,
   reducedMotion: boolean,
+  parallax: HorizontalParallaxFrame,
 ) {
   const minDimension = Math.min(scene.width, scene.height);
   const motionTime = reducedMotion ? 0 : time;
@@ -2646,6 +2729,11 @@ function getPlanetRenderStates(
       y = planet.y * scene.height
         + Math.sin(planet.phase + motionTime * planet.waveSpeed) * planet.waveY;
     }
+
+    const parallaxDepth = planet.kind === 'violet'
+      ? HORIZONTAL_PARALLAX_DEPTH.distant
+      : HORIZONTAL_PARALLAX_DEPTH.middle;
+    x += getHorizontalParallaxOffset(parallax, parallaxDepth);
 
     return { planet, x, y, radius, surfacePhase };
   });
@@ -2693,8 +2781,9 @@ function drawPlanets(
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
   layer: PlanetLayer,
+  parallax: HorizontalParallaxFrame,
 ) {
-  const states = getPlanetRenderStates(scene, time, reducedMotion);
+  const states = getPlanetRenderStates(scene, time, reducedMotion, parallax);
 
   for (const { planet, x, y, radius, surfacePhase } of states) {
     const belongsToLayer = layer === 'distant-rogue'
@@ -2744,65 +2833,145 @@ function drawScene(
   activeColor: Rgb,
   isDark: boolean,
   reducedMotion: boolean,
+  horizontalParallaxPosition: number,
 ) {
   const renderTheme = isDark ? COSMIC_RENDER_THEMES.dark : COSMIC_RENDER_THEMES.light;
+  const parallax = createHorizontalParallaxFrame(scene, horizontalParallaxPosition);
   context.clearRect(0, 0, scene.width, scene.height);
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = 1;
   drawBackgroundWash(context, scene, activeColor, renderTheme);
-  drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion, 'distant-rogue');
-  drawQuasar(context, scene, time, renderTheme, reducedMotion);
-  drawSecondaryRingSystem(
-    context,
-    scene.secondaryRings.distant,
-    time,
-    activeColor,
-    renderTheme.secondaryRings.distantAlpha,
-    renderTheme.secondaryRings.dashAlpha * 0.72,
-    reducedMotion,
-  );
-  drawSecondaryRingParticles(
+  drawPlanets(
     context,
     scene,
-    scene.secondaryRings.distant,
     time,
     activeColor,
     renderTheme,
-    0.72,
     reducedMotion,
+    'distant-rogue',
+    parallax,
   );
-  drawStarClusterSprites(context, scene, time, renderTheme, isDark, reducedMotion, 'far');
-  drawFieldStars(context, scene, time, renderTheme, reducedMotion);
-  drawGoldStars(context, scene, time, renderTheme, reducedMotion);
-  drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion, 'rogue');
-  drawMainRingAurora(context, scene, time, activeColor, renderTheme, reducedMotion);
-  drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion);
-  drawSecondaryRingSystem(
-    context,
-    scene.secondaryRings.inner,
-    time,
-    activeColor,
-    renderTheme.secondaryRings.innerAlpha,
-    renderTheme.secondaryRings.dashAlpha,
-    reducedMotion,
-  );
-  drawSecondaryRingParticles(
+  drawAtHorizontalDepth(context, parallax, HORIZONTAL_PARALLAX_DEPTH.distant, () => {
+    drawQuasar(context, scene, time, renderTheme, reducedMotion);
+  });
+  drawAtHorizontalDepth(context, parallax, HORIZONTAL_PARALLAX_DEPTH.far, () => {
+    drawSecondaryRingSystem(
+      context,
+      scene.secondaryRings.distant,
+      time,
+      activeColor,
+      renderTheme.secondaryRings.distantAlpha,
+      renderTheme.secondaryRings.dashAlpha * 0.72,
+      reducedMotion,
+    );
+    drawSecondaryRingParticles(
+      context,
+      scene,
+      scene.secondaryRings.distant,
+      time,
+      activeColor,
+      renderTheme,
+      0.72,
+      reducedMotion,
+    );
+  });
+  drawStarClusterSprites(
     context,
     scene,
-    scene.secondaryRings.inner,
+    time,
+    renderTheme,
+    isDark,
+    reducedMotion,
+    'far',
+    parallax,
+  );
+  drawFieldStars(context, scene, time, renderTheme, reducedMotion, parallax);
+  drawGoldStars(context, scene, time, renderTheme, reducedMotion, parallax);
+  drawPlanets(
+    context,
+    scene,
     time,
     activeColor,
     renderTheme,
-    0.92,
     reducedMotion,
+    'rogue',
+    parallax,
   );
-  drawStarClusterSprites(context, scene, time, renderTheme, isDark, reducedMotion, 'ring');
-  drawCloudCore(context, scene, time, activeColor, renderTheme, reducedMotion);
-  drawVortex(context, scene, time, activeColor, renderTheme, reducedMotion);
-  drawStarClusterHighlights(context, scene, time, activeColor, renderTheme, reducedMotion);
-  drawRingParticles(context, scene, time, activeColor, renderTheme, reducedMotion);
-  drawForegroundClouds(context, scene, time, activeColor, renderTheme, reducedMotion);
-  drawPlanets(context, scene, time, activeColor, renderTheme, reducedMotion, 'orbit');
+  drawAtHorizontalDepth(context, parallax, HORIZONTAL_PARALLAX_DEPTH.middle, () => {
+    drawMainRingAurora(context, scene, time, activeColor, renderTheme, reducedMotion);
+    drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion);
+    drawSecondaryRingSystem(
+      context,
+      scene.secondaryRings.inner,
+      time,
+      activeColor,
+      renderTheme.secondaryRings.innerAlpha,
+      renderTheme.secondaryRings.dashAlpha,
+      reducedMotion,
+    );
+    drawSecondaryRingParticles(
+      context,
+      scene,
+      scene.secondaryRings.inner,
+      time,
+      activeColor,
+      renderTheme,
+      0.92,
+      reducedMotion,
+    );
+  });
+  drawStarClusterSprites(
+    context,
+    scene,
+    time,
+    renderTheme,
+    isDark,
+    reducedMotion,
+    'ring',
+    parallax,
+  );
+  drawAtHorizontalDepth(context, parallax, HORIZONTAL_PARALLAX_DEPTH.near, () => {
+    drawCloudCore(context, scene, time, activeColor, renderTheme, reducedMotion);
+  });
+  drawAtHorizontalDepth(context, parallax, HORIZONTAL_PARALLAX_DEPTH.middle, () => {
+    drawVortex(context, scene, time, activeColor, renderTheme, reducedMotion);
+  });
+  drawStarClusterHighlights(
+    context,
+    scene,
+    time,
+    activeColor,
+    renderTheme,
+    reducedMotion,
+    'far',
+    parallax,
+  );
+  drawStarClusterHighlights(
+    context,
+    scene,
+    time,
+    activeColor,
+    renderTheme,
+    reducedMotion,
+    'ring',
+    parallax,
+  );
+  drawAtHorizontalDepth(context, parallax, HORIZONTAL_PARALLAX_DEPTH.middle, () => {
+    drawRingParticles(context, scene, time, activeColor, renderTheme, reducedMotion);
+  });
+  drawAtHorizontalDepth(context, parallax, HORIZONTAL_PARALLAX_DEPTH.foreground, () => {
+    drawForegroundClouds(context, scene, time, activeColor, renderTheme, reducedMotion);
+  });
+  drawPlanets(
+    context,
+    scene,
+    time,
+    activeColor,
+    renderTheme,
+    reducedMotion,
+    'orbit',
+    parallax,
+  );
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
 }
@@ -2831,6 +3000,7 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
 
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const coarsePointer = window.matchMedia('(pointer: coarse)');
+    const parallaxPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
     let scene: Scene | null = null;
     let animationFrame = 0;
     let resizeFrame = 0;
@@ -2839,6 +3009,8 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     let sceneTime = 0;
     let isDark = document.documentElement.classList.contains('dark');
     let reducedMotion = motionPreference.matches;
+    let targetHorizontalParallax = 0;
+    let currentHorizontalParallax = 0;
     const currentColor: Rgb = [...targetColorRef.current];
 
     const paint = (time: number) => {
@@ -2850,7 +3022,23 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       currentColor[0] += (targetColorRef.current[0] - currentColor[0]) * colorEase;
       currentColor[1] += (targetColorRef.current[1] - currentColor[1]) * colorEase;
       currentColor[2] += (targetColorRef.current[2] - currentColor[2]) * colorEase;
-      drawScene(context, scene, sceneTime, currentColor, isDark, reducedMotion);
+      if (reducedMotion || !parallaxPointer.matches) {
+        currentHorizontalParallax = 0;
+      } else {
+        const parallaxEase = 1 - Math.exp(-elapsed / HORIZONTAL_PARALLAX_EASE_MS);
+        currentHorizontalParallax += (
+          targetHorizontalParallax - currentHorizontalParallax
+        ) * parallaxEase;
+      }
+      drawScene(
+        context,
+        scene,
+        sceneTime,
+        currentColor,
+        isDark,
+        reducedMotion,
+        currentHorizontalParallax,
+      );
     };
 
     const animate = (time: number) => {
@@ -2901,9 +3089,25 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       resizeFrame = window.requestAnimationFrame(resize);
     };
 
+    const resetHorizontalParallax = () => {
+      targetHorizontalParallax = 0;
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (reducedMotion || !parallaxPointer.matches || event.pointerType === 'touch') return;
+      const viewportWidth = Math.max(window.innerWidth, 1);
+      targetHorizontalParallax = clamp(event.clientX / viewportWidth * 2 - 1, -1, 1);
+    };
+
+    const handleParallaxCapabilityChange = () => {
+      if (!parallaxPointer.matches) resetHorizontalParallax();
+    };
+
     const handleMotionPreference = () => {
       reducedMotion = motionPreference.matches;
       if (reducedMotion) {
+        targetHorizontalParallax = 0;
+        currentHorizontalParallax = 0;
         currentColor[0] = targetColorRef.current[0];
         currentColor[1] = targetColorRef.current[1];
         currentColor[2] = targetColorRef.current[2];
@@ -2930,6 +3134,10 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     resizeObserver.observe(canvas);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     motionPreference.addEventListener('change', handleMotionPreference);
+    parallaxPointer.addEventListener('change', handleParallaxCapabilityChange);
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('blur', resetHorizontalParallax);
+    document.documentElement.addEventListener('pointerleave', resetHorizontalParallax);
     document.addEventListener('visibilitychange', handleVisibility);
     resize();
     startAnimation();
@@ -2940,6 +3148,10 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       resizeObserver.disconnect();
       themeObserver.disconnect();
       motionPreference.removeEventListener('change', handleMotionPreference);
+      parallaxPointer.removeEventListener('change', handleParallaxCapabilityChange);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('blur', resetHorizontalParallax);
+      document.documentElement.removeEventListener('pointerleave', resetHorizontalParallax);
       document.removeEventListener('visibilitychange', handleVisibility);
       redrawStaticSceneRef.current = null;
     };
