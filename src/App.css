@@ -125,6 +125,14 @@ html.background-view-active body {
 
 /* Ambient, section-aware background */
 .ambient-background {
+  --edge-glow-depth-shift-x: 0px;
+  --edge-glow-depth-shift-y: 0px;
+  --edge-glow-depth-rotate-x: 0deg;
+  --edge-glow-depth-rotate-y: 0deg;
+  --edge-glow-top-left-depth-scale: 1;
+  --edge-glow-top-right-depth-scale: 1;
+  --edge-glow-bottom-right-depth-scale: 1;
+
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -148,6 +156,36 @@ html.background-view-active body {
   inset: 0;
   z-index: 0;
   overflow: hidden;
+  transform: perspective(1400px)
+    translate3d(
+      var(--edge-glow-depth-shift-x),
+      var(--edge-glow-depth-shift-y),
+      0
+    )
+    rotateX(var(--edge-glow-depth-rotate-x))
+    rotateY(var(--edge-glow-depth-rotate-y));
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.ambient-edge-glow-depth {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.ambient-edge-glow-depth-top-left {
+  transform: scale(var(--edge-glow-top-left-depth-scale));
+}
+
+.ambient-edge-glow-depth-top-right {
+  transform: scale(var(--edge-glow-top-right-depth-scale));
+}
+
+.ambient-edge-glow-depth-bottom-right {
+  transform: scale(var(--edge-glow-bottom-right-depth-scale));
 }
 
 .ambient-edge-glow {

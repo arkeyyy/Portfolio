@@ -106,6 +106,7 @@ type PlanetRenderState = {
   y: number;
   radius: number;
   surfacePhase: number;
+  viewPose: ParallaxPose;
 };
 
 type OrbitGeometry = {
@@ -307,6 +308,51 @@ type ParallaxFrame = {
   positionY: number;
   maximumOffsetX: number;
   maximumOffsetY: number;
+  maximumPitch: number;
+  maximumYaw: number;
+  centerX: number;
+  centerY: number;
+  inverseHalfWidth: number;
+  inverseHalfHeight: number;
+  cursorNormalization: number;
+  maximumPerspectiveScale: number;
+};
+
+type ParallaxPose = {
+  offsetX: number;
+  offsetY: number;
+  pitch: number;
+  yaw: number;
+  response: number;
+};
+
+type DepthFieldProjection = {
+  x: number;
+  y: number;
+  scale: number;
+  alphaScale: number;
+};
+
+type DepthFieldSurface = DepthFieldProjection & {
+  anchorX: number;
+  anchorY: number;
+  matrixA: number;
+  matrixB: number;
+  matrixC: number;
+  matrixD: number;
+};
+
+type DepthFieldLayer = {
+  translationDepth: number;
+  perspectiveDepth: number;
+  perspectiveStrength: number;
+};
+
+type EdgeGlowDepthSpec = {
+  variable: string;
+  normalizedX: number;
+  normalizedY: number;
+  perspectiveStrength: number;
 };
 
 const TAU = Math.PI * 2;
@@ -325,6 +371,54 @@ const PARALLAX_DEPTH = {
   goldStars: 0.32,
   starClusters: 0.44,
 } as const;
+const PLANET_PARALLAX_TILT_SCALE = 1.45;
+const DEPTH_FIELD_STAR_STRENGTH = {
+  field: 0.65,
+  gold: 0.78,
+  cluster: 0.62,
+} as const;
+const DEPTH_FIELD_LAYERS = {
+  distantRing: {
+    translationDepth: PARALLAX_DEPTH.far,
+    perspectiveDepth: 1,
+    perspectiveStrength: 0.28,
+  },
+  mainRing: {
+    translationDepth: PARALLAX_DEPTH.middle,
+    perspectiveDepth: 1,
+    perspectiveStrength: 0.48,
+  },
+  cloudCore: {
+    translationDepth: PARALLAX_DEPTH.near,
+    perspectiveDepth: 1,
+    perspectiveStrength: 0.42,
+  },
+  foregroundClouds: {
+    translationDepth: PARALLAX_DEPTH.foreground,
+    perspectiveDepth: 1,
+    perspectiveStrength: 0.62,
+  },
+} as const satisfies Record<string, DepthFieldLayer>;
+const EDGE_GLOW_DEPTH_SPECS: readonly EdgeGlowDepthSpec[] = [
+  {
+    variable: '--edge-glow-top-left-depth-scale',
+    normalizedX: -0.82,
+    normalizedY: -0.76,
+    perspectiveStrength: 0.42,
+  },
+  {
+    variable: '--edge-glow-top-right-depth-scale',
+    normalizedX: 0.82,
+    normalizedY: -0.74,
+    perspectiveStrength: 0.34,
+  },
+  {
+    variable: '--edge-glow-bottom-right-depth-scale',
+    normalizedX: 0.8,
+    normalizedY: 0.82,
+    perspectiveStrength: 0.52,
+  },
+];
 // Fog lives in the same camera-depth system as every other celestial object.
 // Add another data entry here to give future haze a render stage and parallax depth.
 const ATMOSPHERIC_FOG_LAYERS: readonly AtmosphericFogLayer[] = [
@@ -556,12 +650,241 @@ function createParallaxFrame(
   positionX: number,
   positionY: number,
 ): ParallaxFrame {
+  const clampedPositionX = clamp(positionX, -1, 1);
+  const clampedPositionY = clamp(positionY, -1, 1);
   return {
-    positionX: clamp(positionX, -1, 1),
-    positionY: clamp(positionY, -1, 1),
+    positionX: clampedPositionX,
+    positionY: clampedPositionY,
     maximumOffsetX: clamp(scene.width * 0.03, 18, 44),
     maximumOffsetY: clamp(scene.height * 0.024, 12, 28),
+    maximumPitch: 10 * Math.PI / 180,
+    maximumYaw: 14 * Math.PI / 180,
+    centerX: scene.width * 0.5,
+    centerY: scene.height * 0.5,
+    inverseHalfWidth: 2 / Math.max(scene.width, 1),
+    inverseHalfHeight: 2 / Math.max(scene.height, 1),
+    cursorNormalization: 1 / Math.max(
+      1,
+      Math.abs(clampedPositionX) + Math.abs(clampedPositionY),
+    ),
+    maximumPerspectiveScale: 0.065,
   };
+}
+
+function getParallaxPose(
+  parallax: ParallaxFrame,
+  depth: number,
+  tiltScale = 1,
+  orientationDepth = depth,
+): ParallaxPose {
+  const response = clamp(orientationDepth * tiltScale, 0, 1);
+  return {
+    offsetX: getParallaxOffsetX(parallax, depth),
+    offsetY: getParallaxOffsetY(parallax, depth),
+    pitch: -parallax.positionY * parallax.maximumPitch * response,
+    yaw: parallax.positionX * parallax.maximumYaw * response,
+    response,
+  };
+}
+
+function applyParallaxPlaneTilt(
+  context: CanvasRenderingContext2D,
+  pose: ParallaxPose,
+  strength = 1,
+) {
+  context.transform(
+    1,
+    Math.sin(pose.pitch) * 0.16 * strength,
+    Math.sin(pose.yaw) * 0.11 * strength,
+    1,
+    0,
+    0,
+  );
+}
+
+// Projects a point through the cursor-weighted depth field. Points beneath the
+// cursor recede toward the viewport center, while points opposite it approach.
+// The output parameter keeps dense star and ring loops allocation-free.
+function projectAtParallaxDepth(
+  parallax: ParallaxFrame,
+  x: number,
+  y: number,
+  translationDepth: number,
+  perspectiveDepth: number,
+  perspectiveStrength: number,
+  output: DepthFieldProjection,
+) {
+  const normalizedX = clamp(
+    (x - parallax.centerX) * parallax.inverseHalfWidth,
+    -1.15,
+    1.15,
+  );
+  const normalizedY = clamp(
+    (y - parallax.centerY) * parallax.inverseHalfHeight,
+    -1.15,
+    1.15,
+  );
+  const cursorSide = clamp(
+    (
+      normalizedX * parallax.positionX
+      + normalizedY * parallax.positionY
+    ) * parallax.cursorNormalization,
+    -1,
+    1,
+  );
+  const response = cursorSide
+    * clamp(perspectiveDepth, 0, 1)
+    * perspectiveStrength;
+  const scale = clamp(
+    1 - response * parallax.maximumPerspectiveScale,
+    0.9,
+    1.1,
+  );
+
+  output.x = parallax.centerX
+    + (x - parallax.centerX) * scale
+    + getParallaxOffsetX(parallax, translationDepth);
+  output.y = parallax.centerY
+    + (y - parallax.centerY) * scale
+    + getParallaxOffsetY(parallax, translationDepth);
+  output.scale = scale;
+  output.alphaScale = clamp(1 - response * 0.14, 0.9, 1.1);
+}
+
+function syncEdgeGlowDepth(
+  background: HTMLElement,
+  parallax: ParallaxFrame,
+) {
+  const style = background.style;
+  style.setProperty(
+    '--edge-glow-depth-shift-x',
+    `${(-parallax.positionX * parallax.maximumOffsetX * 0.3).toFixed(2)}px`,
+  );
+  style.setProperty(
+    '--edge-glow-depth-shift-y',
+    `${(-parallax.positionY * parallax.maximumOffsetY * 0.3).toFixed(2)}px`,
+  );
+  style.setProperty(
+    '--edge-glow-depth-rotate-x',
+    `${(-parallax.positionY * 1.15).toFixed(3)}deg`,
+  );
+  style.setProperty(
+    '--edge-glow-depth-rotate-y',
+    `${(parallax.positionX * 1.35).toFixed(3)}deg`,
+  );
+
+  for (const glow of EDGE_GLOW_DEPTH_SPECS) {
+    const cursorSide = clamp(
+      (
+        glow.normalizedX * parallax.positionX
+        + glow.normalizedY * parallax.positionY
+      ) * parallax.cursorNormalization,
+      -1,
+      1,
+    );
+    const scale = clamp(
+      1
+        - cursorSide
+        * parallax.maximumPerspectiveScale
+        * glow.perspectiveStrength,
+      0.94,
+      1.06,
+    );
+    style.setProperty(glow.variable, scale.toFixed(4));
+  }
+}
+
+function getDepthFieldSurface(
+  parallax: ParallaxFrame,
+  anchorX: number,
+  anchorY: number,
+  layer: DepthFieldLayer,
+): DepthFieldSurface {
+  const projection: DepthFieldProjection = {
+    x: anchorX,
+    y: anchorY,
+    scale: 1,
+    alphaScale: 1,
+  };
+  projectAtParallaxDepth(
+    parallax,
+    anchorX,
+    anchorY,
+    layer.translationDepth,
+    layer.perspectiveDepth,
+    layer.perspectiveStrength,
+    projection,
+  );
+  const sampleDistance = 4;
+  const positiveX: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
+  const negativeX: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
+  const positiveY: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
+  const negativeY: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
+  projectAtParallaxDepth(
+    parallax,
+    anchorX + sampleDistance,
+    anchorY,
+    layer.translationDepth,
+    layer.perspectiveDepth,
+    layer.perspectiveStrength,
+    positiveX,
+  );
+  projectAtParallaxDepth(
+    parallax,
+    anchorX - sampleDistance,
+    anchorY,
+    layer.translationDepth,
+    layer.perspectiveDepth,
+    layer.perspectiveStrength,
+    negativeX,
+  );
+  projectAtParallaxDepth(
+    parallax,
+    anchorX,
+    anchorY + sampleDistance,
+    layer.translationDepth,
+    layer.perspectiveDepth,
+    layer.perspectiveStrength,
+    positiveY,
+  );
+  projectAtParallaxDepth(
+    parallax,
+    anchorX,
+    anchorY - sampleDistance,
+    layer.translationDepth,
+    layer.perspectiveDepth,
+    layer.perspectiveStrength,
+    negativeY,
+  );
+  const sampleSpan = sampleDistance * 2;
+
+  return {
+    ...projection,
+    anchorX,
+    anchorY,
+    matrixA: (positiveX.x - negativeX.x) / sampleSpan,
+    matrixB: (positiveX.y - negativeX.y) / sampleSpan,
+    matrixC: (positiveY.x - negativeY.x) / sampleSpan,
+    matrixD: (positiveY.y - negativeY.y) / sampleSpan,
+  };
+}
+
+function drawOnDepthFieldSurface(
+  context: CanvasRenderingContext2D,
+  surface: DepthFieldSurface,
+  draw: () => void,
+) {
+  context.save();
+  context.transform(
+    surface.matrixA,
+    surface.matrixB,
+    surface.matrixC,
+    surface.matrixD,
+    surface.x - surface.matrixA * surface.anchorX - surface.matrixC * surface.anchorY,
+    surface.y - surface.matrixB * surface.anchorX - surface.matrixD * surface.anchorY,
+  );
+  draw();
+  context.restore();
 }
 
 function getParallaxOffsetX(
@@ -582,18 +905,17 @@ function drawAtParallaxDepth(
   context: CanvasRenderingContext2D,
   parallax: ParallaxFrame,
   depth: number,
-  draw: () => void,
+  draw: (pose: ParallaxPose) => void,
 ) {
-  const offsetX = getParallaxOffsetX(parallax, depth);
-  const offsetY = getParallaxOffsetY(parallax, depth);
-  if (Math.abs(offsetX) < 0.01 && Math.abs(offsetY) < 0.01) {
-    draw();
+  const pose = getParallaxPose(parallax, depth);
+  if (Math.abs(pose.offsetX) < 0.01 && Math.abs(pose.offsetY) < 0.01) {
+    draw(pose);
     return;
   }
 
   context.save();
-  context.translate(offsetX, offsetY);
-  draw();
+  context.translate(pose.offsetX, pose.offsetY);
+  draw(pose);
   context.restore();
 }
 
@@ -1804,6 +2126,7 @@ function drawQuasar(
   time: number,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
+  viewPose: ParallaxPose,
 ) {
   const { quasar } = scene;
   const motionTime = reducedMotion ? 0 : time;
@@ -1814,12 +2137,14 @@ function drawQuasar(
   const driftY = reducedMotion ? 0 : Math.cos(motionTime * 0.000026 + 1.1) * 1.8;
   const centerX = quasar.centerX + driftX;
   const centerY = quasar.centerY + driftY;
-  const rotation = -0.14;
+  const rotation = -0.14 + Math.sin(viewPose.yaw) * 0.55;
+  const discScaleY = clamp(0.29 + Math.sin(viewPose.pitch) * 0.5, 0.2, 0.4);
 
   context.save();
   context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
   context.translate(centerX, centerY);
   context.rotate(reducedMotion ? 0 : Math.sin(motionTime * 0.000021) * 0.018);
+  applyParallaxPlaneTilt(context, viewPose, 0.6);
   context.globalAlpha = renderTheme.quasar.spriteAlpha * pulse;
   const spriteSize = quasar.size * (0.96 + pulse * 0.04);
   context.drawImage(
@@ -1855,7 +2180,7 @@ function drawQuasar(
       renderTheme.quasar.lensAlpha * lensPulse * (1 - lens * 0.13),
     );
     context.beginPath();
-    context.ellipse(0, 0, radius, radius * 0.29, 0, 0, TAU);
+    context.ellipse(0, 0, radius, radius * discScaleY, 0, 0, TAU);
     context.stroke();
   }
   context.setLineDash([]);
@@ -1881,9 +2206,9 @@ function drawQuasar(
     const previousAngle = particle.angle
       + particle.direction * previousProgress * TAU * 0.72;
     const localX = Math.cos(angle) * radius;
-    const localY = Math.sin(angle) * radius * 0.34;
+    const localY = Math.sin(angle) * radius * discScaleY;
     const previousLocalX = Math.cos(previousAngle) * previousRadius;
-    const previousLocalY = Math.sin(previousAngle) * previousRadius * 0.34;
+    const previousLocalY = Math.sin(previousAngle) * previousRadius * discScaleY;
     const x = snapToPixel(
       centerX + localX * cosRotation - localY * sinRotation,
       scene.pixelRatio,
@@ -1936,41 +2261,41 @@ function drawStarClusterSprites(
   layer: ClusterLayer,
   parallax: ParallaxFrame,
 ) {
-  context.save();
   for (const cluster of scene.starClusters) {
     if (cluster.layer !== layer) continue;
     const [driftX, driftY, opacityPulse] = getStarClusterMotion(cluster, time, reducedMotion);
-    const parallaxX = getParallaxOffsetX(
+    const anchorX = cluster.centerX + driftX;
+    const anchorY = cluster.centerY + driftY;
+    const surface = getDepthFieldSurface(
       parallax,
-      cluster.depth * PARALLAX_DEPTH.starClusters,
+      anchorX,
+      anchorY,
+      {
+        translationDepth: cluster.depth * PARALLAX_DEPTH.starClusters,
+        perspectiveDepth: cluster.depth,
+        perspectiveStrength: DEPTH_FIELD_STAR_STRENGTH.cluster,
+      },
     );
-    const parallaxY = getParallaxOffsetY(
-      parallax,
-      cluster.depth * PARALLAX_DEPTH.starClusters,
-    );
-    const x = snapToPixel(
-      cluster.centerX - cluster.width * 0.5 + driftX + parallaxX,
-      scene.pixelRatio,
-    );
-    const y = snapToPixel(
-      cluster.centerY - cluster.height * 0.5 + driftY + parallaxY,
-      scene.pixelRatio,
-    );
+    const x = snapToPixel(anchorX - cluster.width * 0.5, scene.pixelRatio);
+    const y = snapToPixel(anchorY - cluster.height * 0.5, scene.pixelRatio);
     const sprite = isDark ? cluster.darkSprite : cluster.lightSprite;
-    context.globalAlpha = renderTheme.starClusters.baseAlpha * opacityPulse;
-    context.drawImage(
-      sprite,
-      0,
-      0,
-      sprite.width,
-      sprite.height,
-      x,
-      y,
-      cluster.width,
-      cluster.height,
-    );
+    drawOnDepthFieldSurface(context, surface, () => {
+      context.globalAlpha = renderTheme.starClusters.baseAlpha
+        * opacityPulse
+        * surface.alphaScale;
+      context.drawImage(
+        sprite,
+        0,
+        0,
+        sprite.width,
+        sprite.height,
+        x,
+        y,
+        cluster.width,
+        cluster.height,
+      );
+    });
   }
-  context.restore();
 }
 
 function drawStarClusterHighlights(
@@ -1987,40 +2312,43 @@ function drawStarClusterHighlights(
   for (const cluster of scene.starClusters) {
     if (cluster.layer !== layer) continue;
     const [driftX, driftY] = getStarClusterMotion(cluster, time, reducedMotion);
-    const originX = cluster.centerX
-      - cluster.width * 0.5
-      + driftX
-      + getParallaxOffsetX(
-        parallax,
-        cluster.depth * PARALLAX_DEPTH.starClusters,
-      );
-    const originY = cluster.centerY
-      - cluster.height * 0.5
-      + driftY
-      + getParallaxOffsetY(
-        parallax,
-        cluster.depth * PARALLAX_DEPTH.starClusters,
-      );
+    const anchorX = cluster.centerX + driftX;
+    const anchorY = cluster.centerY + driftY;
+    const originX = anchorX - cluster.width * 0.5;
+    const originY = anchorY - cluster.height * 0.5;
+    const surface = getDepthFieldSurface(
+      parallax,
+      anchorX,
+      anchorY,
+      {
+        translationDepth: cluster.depth * PARALLAX_DEPTH.starClusters,
+        perspectiveDepth: cluster.depth,
+        perspectiveStrength: DEPTH_FIELD_STAR_STRENGTH.cluster,
+      },
+    );
 
-    for (const highlight of cluster.highlights) {
-      const twinkle = reducedMotion
-        ? 0.74
-        : 0.67 + Math.sin(time * 0.00115 + highlight.phase) * 0.26;
-      const color = getAnimatedStarColor(
-        highlight.colorSeed,
-        highlight.colorOffset,
-        motionTime,
-        activeColor,
-        renderTheme.neutralStarColor,
-        highlight.tintStrength,
-      );
-      const x = snapToPixel(originX + highlight.localX, scene.pixelRatio);
-      const y = snapToPixel(originY + highlight.localY, scene.pixelRatio);
-      const alpha = renderTheme.starClusters.highlightAlpha
-        * (0.62 + cluster.depth * 0.38)
-        * twinkle;
-      drawStar(context, x, y, highlight.size, color, alpha);
-    }
+    drawOnDepthFieldSurface(context, surface, () => {
+      for (const highlight of cluster.highlights) {
+        const twinkle = reducedMotion
+          ? 0.74
+          : 0.67 + Math.sin(time * 0.00115 + highlight.phase) * 0.26;
+        const color = getAnimatedStarColor(
+          highlight.colorSeed,
+          highlight.colorOffset,
+          motionTime,
+          activeColor,
+          renderTheme.neutralStarColor,
+          highlight.tintStrength,
+        );
+        const x = snapToPixel(originX + highlight.localX, scene.pixelRatio);
+        const y = snapToPixel(originY + highlight.localY, scene.pixelRatio);
+        const alpha = renderTheme.starClusters.highlightAlpha
+          * (0.62 + cluster.depth * 0.38)
+          * twinkle
+          * surface.alphaScale;
+        drawStar(context, x, y, highlight.size, color, alpha);
+      }
+    });
   }
 }
 
@@ -2032,24 +2360,36 @@ function drawFieldStars(
   reducedMotion: boolean,
   parallax: ParallaxFrame,
 ) {
+  const projection: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
   for (const star of scene.stars) {
     const motionTime = reducedMotion ? 0 : time;
-    const x = star.x * scene.width
-      + Math.sin(motionTime * 0.00022 + star.phase) * 13 * star.depth
-      + getParallaxOffsetX(
-        parallax,
-        star.depth * PARALLAX_DEPTH.starField,
-      );
-    const y = star.y * scene.height
-      + Math.cos(motionTime * 0.00017 + star.phase) * 9 * star.depth
-      + getParallaxOffsetY(
-        parallax,
-        star.depth * PARALLAX_DEPTH.starField,
-      );
+    const baseX = star.x * scene.width
+      + Math.sin(motionTime * 0.00022 + star.phase) * 13 * star.depth;
+    const baseY = star.y * scene.height
+      + Math.cos(motionTime * 0.00017 + star.phase) * 9 * star.depth;
+    projectAtParallaxDepth(
+      parallax,
+      baseX,
+      baseY,
+      star.depth * PARALLAX_DEPTH.starField,
+      star.depth,
+      DEPTH_FIELD_STAR_STRENGTH.field,
+      projection,
+    );
     const twinkle = reducedMotion ? 0.72 : 0.58 + Math.sin(time * 0.0013 + star.phase) * 0.28;
     const color = getAnimatedFieldStarColor(star.colorSeed, star.colorOffset, reducedMotion ? 0 : time);
-    const alpha = renderTheme.fieldStarAlpha * star.depth * twinkle;
-    drawStar(context, x, y, star.size * (0.62 + star.depth * 0.84), color, alpha);
+    const alpha = renderTheme.fieldStarAlpha
+      * star.depth
+      * twinkle
+      * projection.alphaScale;
+    drawStar(
+      context,
+      projection.x,
+      projection.y,
+      star.size * (0.62 + star.depth * 0.84) * projection.scale,
+      color,
+      alpha,
+    );
   }
 }
 
@@ -2065,43 +2405,112 @@ function drawGoldStars(
   const deepGold: Rgb = [232, 183, 82];
   const warmGold: Rgb = [255, 218, 132];
   const warmWhite: Rgb = [255, 246, 218];
+  const projection: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
 
   for (const star of scene.goldStars) {
-    const x = star.x * scene.width
-      + Math.sin(motionTime * 0.00016 + star.phase) * star.drift
-      + getParallaxOffsetX(
-        parallax,
-        star.depth * PARALLAX_DEPTH.goldStars,
-      );
-    const y = star.y * scene.height
-      + Math.cos(motionTime * 0.00012 + star.phase) * star.drift * 0.65
-      + getParallaxOffsetY(
-        parallax,
-        star.depth * PARALLAX_DEPTH.goldStars,
-      );
+    const baseX = star.x * scene.width
+      + Math.sin(motionTime * 0.00016 + star.phase) * star.drift;
+    const baseY = star.y * scene.height
+      + Math.cos(motionTime * 0.00012 + star.phase) * star.drift * 0.65;
+    projectAtParallaxDepth(
+      parallax,
+      baseX,
+      baseY,
+      star.depth * PARALLAX_DEPTH.goldStars,
+      star.depth,
+      DEPTH_FIELD_STAR_STRENGTH.gold,
+      projection,
+    );
     const sparkle = reducedMotion
       ? 0.82
       : 0.72 + Math.sin(time * 0.00155 + star.phase) * 0.2;
-    const alpha = renderTheme.goldStarAlpha * (0.52 + star.depth * 0.48) * sparkle;
-    const size = star.size * (0.88 + sparkle * 0.16);
+    const alpha = renderTheme.goldStarAlpha
+      * (0.52 + star.depth * 0.48)
+      * sparkle
+      * projection.alphaScale;
+    const size = star.size * (0.88 + sparkle * 0.16) * projection.scale;
     const color = mixRgb(deepGold, warmGold, star.depth);
 
     if (star.depth > 0.76 && sparkle > 0.82) {
       const arm = size * (1.45 + sparkle * 0.55);
       const armWidth = Math.max(0.24, size * 0.2);
       context.fillStyle = rgba(color, alpha * 0.26);
-      context.fillRect(x - arm, y - armWidth * 0.5, arm * 2, armWidth);
-      context.fillRect(x - armWidth * 0.5, y - arm, armWidth, arm * 2);
+      context.fillRect(
+        projection.x - arm,
+        projection.y - armWidth * 0.5,
+        arm * 2,
+        armWidth,
+      );
+      context.fillRect(
+        projection.x - armWidth * 0.5,
+        projection.y - arm,
+        armWidth,
+        arm * 2,
+      );
     }
 
     const coreSize = Math.max(0.48, size * 0.64);
     context.fillStyle = rgba(color, alpha * 0.42);
     context.beginPath();
-    context.arc(x, y, size * 1.38, 0, TAU);
+    context.arc(projection.x, projection.y, size * 1.38, 0, TAU);
     context.fill();
     context.fillStyle = rgba(warmWhite, alpha * (0.74 + star.depth * 0.26));
-    context.fillRect(x - coreSize * 0.5, y - coreSize * 0.5, coreSize, coreSize);
+    context.fillRect(
+      projection.x - coreSize * 0.5,
+      projection.y - coreSize * 0.5,
+      coreSize,
+      coreSize,
+    );
   }
+}
+
+function traceProjectedOrbit(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  parallax: ParallaxFrame,
+  orbit: OrbitGeometry,
+  laneScale: number,
+  layer: DepthFieldLayer,
+) {
+  if (Math.abs(parallax.positionX) + Math.abs(parallax.positionY) < 0.001) {
+    context.beginPath();
+    context.ellipse(
+      orbit.centerX + getParallaxOffsetX(parallax, layer.translationDepth),
+      orbit.centerY + getParallaxOffsetY(parallax, layer.translationDepth),
+      orbit.radiusX * laneScale,
+      orbit.radiusY * laneScale,
+      orbit.tilt,
+      0,
+      TAU,
+    );
+    return;
+  }
+
+  const cosTilt = Math.cos(orbit.tilt);
+  const sinTilt = Math.sin(orbit.tilt);
+  const segmentCount = scene.compact ? 56 : 80;
+  const projection: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
+
+  context.beginPath();
+  for (let segment = 0; segment <= segmentCount; segment += 1) {
+    const angle = segment / segmentCount * TAU;
+    const localX = Math.cos(angle) * orbit.radiusX * laneScale;
+    const localY = Math.sin(angle) * orbit.radiusY * laneScale;
+    const x = orbit.centerX + localX * cosTilt - localY * sinTilt;
+    const y = orbit.centerY + localX * sinTilt + localY * cosTilt;
+    projectAtParallaxDepth(
+      parallax,
+      x,
+      y,
+      layer.translationDepth,
+      layer.perspectiveDepth,
+      layer.perspectiveStrength,
+      projection,
+    );
+    if (segment === 0) context.moveTo(projection.x, projection.y);
+    else context.lineTo(projection.x, projection.y);
+  }
+  context.closePath();
 }
 
 function drawRingTrails(
@@ -2111,24 +2520,29 @@ function drawRingTrails(
   activeColor: Rgb,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
+  parallax: ParallaxFrame,
 ) {
   const { orbit } = scene;
   const motionTime = reducedMotion ? 0 : time;
   context.save();
-  context.translate(orbit.centerX, orbit.centerY);
-  context.rotate(orbit.tilt);
 
   for (let lane = 0; lane < 4; lane += 1) {
     const laneScale = 0.91 + lane * 0.052;
     const trailColor = mixRgb(activeColor, CLOUD_ACCENT, lane * 0.16);
+    traceProjectedOrbit(
+      context,
+      scene,
+      parallax,
+      orbit,
+      laneScale,
+      DEPTH_FIELD_LAYERS.mainRing,
+    );
     context.lineWidth = 0.65 + lane * 0.28;
     context.strokeStyle = rgba(
       trailColor,
       renderTheme.ringTrails.baseAlpha - lane * renderTheme.ringTrails.laneFalloff,
     );
     context.setLineDash([]);
-    context.beginPath();
-    context.ellipse(0, 0, orbit.radiusX * laneScale, orbit.radiusY * laneScale, 0, 0, TAU);
     context.stroke();
 
     context.lineWidth = 1.05 + lane * 0.24;
@@ -2140,8 +2554,6 @@ function drawRingTrails(
       orbit.radiusX * 0.08,
     ]);
     context.lineDashOffset = -motionTime * (0.014 + lane * 0.002);
-    context.beginPath();
-    context.ellipse(0, 0, orbit.radiusX * laneScale, orbit.radiusY * laneScale, 0, 0, TAU);
     context.stroke();
   }
 
@@ -2151,40 +2563,32 @@ function drawRingTrails(
 
 function drawSecondaryRingSystem(
   context: CanvasRenderingContext2D,
+  scene: Scene,
   ring: SecondaryRingSystem,
   time: number,
   activeColor: Rgb,
   baseAlpha: number,
   dashAlpha: number,
   reducedMotion: boolean,
+  parallax: ParallaxFrame,
+  depthLayer: DepthFieldLayer,
 ) {
   const motionTime = reducedMotion ? 0 : time;
   const ringColor = mixRgb(activeColor, FOREGROUND_CLOUD_PURPLE, ring.colorMix);
   const centerLane = (ring.lanes - 1) * 0.5;
 
   context.save();
-  context.translate(ring.centerX, ring.centerY);
-  context.rotate(ring.tilt);
   context.lineCap = 'round';
 
   for (let lane = 0; lane < ring.lanes; lane += 1) {
     const laneOffset = lane - centerLane;
     const laneScale = 1 + laneOffset * ring.laneSpacing;
     const laneAlpha = 1 - Math.abs(laneOffset) * 0.11;
+    traceProjectedOrbit(context, scene, parallax, ring, laneScale, depthLayer);
 
     context.setLineDash([]);
     context.lineWidth = 0.55 + lane * 0.16;
     context.strokeStyle = rgba(ringColor, baseAlpha * laneAlpha);
-    context.beginPath();
-    context.ellipse(
-      0,
-      0,
-      ring.radiusX * laneScale,
-      ring.radiusY * laneScale,
-      0,
-      0,
-      TAU,
-    );
     context.stroke();
 
     context.setLineDash([
@@ -2196,25 +2600,39 @@ function drawSecondaryRingSystem(
     context.lineDashOffset = -motionTime * ring.dashSpeed + lane * ring.radiusX * 0.13;
     context.lineWidth = 0.9 + lane * 0.12;
     context.strokeStyle = rgba(ringColor, dashAlpha * laneAlpha);
-    context.beginPath();
-    context.ellipse(
-      0,
-      0,
-      ring.radiusX * laneScale,
-      ring.radiusY * laneScale,
-      0,
-      0,
-      TAU,
-    );
     context.stroke();
   }
 
   context.setLineDash([]);
   const glintAngle = ring.glintAngle + motionTime * ring.glintSpeed;
-  const glintX = Math.cos(glintAngle) * ring.radiusX;
-  const glintY = Math.sin(glintAngle) * ring.radiusY;
+  const localGlintX = Math.cos(glintAngle) * ring.radiusX;
+  const localGlintY = Math.sin(glintAngle) * ring.radiusY;
+  const cosTilt = Math.cos(ring.tilt);
+  const sinTilt = Math.sin(ring.tilt);
+  const glintProjection: DepthFieldProjection = {
+    x: 0,
+    y: 0,
+    scale: 1,
+    alphaScale: 1,
+  };
+  projectAtParallaxDepth(
+    parallax,
+    ring.centerX + localGlintX * cosTilt - localGlintY * sinTilt,
+    ring.centerY + localGlintX * sinTilt + localGlintY * cosTilt,
+    depthLayer.translationDepth,
+    depthLayer.perspectiveDepth,
+    depthLayer.perspectiveStrength,
+    glintProjection,
+  );
   const glintPulse = reducedMotion ? 0.72 : 0.64 + Math.sin(time * 0.0011 + ring.glintAngle) * 0.24;
-  drawStar(context, glintX, glintY, 1.25, ringColor, dashAlpha * 3.2 * glintPulse);
+  drawStar(
+    context,
+    glintProjection.x,
+    glintProjection.y,
+    1.25 * glintProjection.scale,
+    ringColor,
+    dashAlpha * 3.2 * glintPulse * glintProjection.alphaScale,
+  );
   context.restore();
 }
 
@@ -2227,25 +2645,31 @@ function drawSecondaryRingParticles(
   renderTheme: CosmicRenderTheme,
   opacityScale: number,
   reducedMotion: boolean,
+  parallax: ParallaxFrame,
+  depthLayer: DepthFieldLayer,
 ) {
   const motionTime = reducedMotion ? 0 : time;
   const cosTilt = Math.cos(ring.tilt);
   const sinTilt = Math.sin(ring.tilt);
   const centerLane = (ring.lanes - 1) * 0.5;
   const ringColor = mixRgb(activeColor, FOREGROUND_CLOUD_PURPLE, ring.colorMix);
+  const projection: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
 
   for (const particle of ring.particles) {
     const angle = particle.angle + motionTime * particle.speed;
     const laneScale = 1 + (particle.lane - centerLane) * ring.laneSpacing;
     const localX = Math.cos(angle) * ring.radiusX * laneScale;
     const localY = Math.sin(angle) * ring.radiusY * laneScale;
-    const x = snapToPixel(
-      ring.centerX + localX * cosTilt - localY * sinTilt,
-      scene.pixelRatio,
-    );
-    const y = snapToPixel(
-      ring.centerY + localX * sinTilt + localY * cosTilt,
-      scene.pixelRatio,
+    const x = ring.centerX + localX * cosTilt - localY * sinTilt;
+    const y = ring.centerY + localX * sinTilt + localY * cosTilt;
+    projectAtParallaxDepth(
+      parallax,
+      x,
+      y,
+      depthLayer.translationDepth,
+      depthLayer.perspectiveDepth,
+      depthLayer.perspectiveStrength,
+      projection,
     );
     const depth = (Math.sin(angle) + 1) * 0.5;
     const twinkle = reducedMotion
@@ -2263,9 +2687,17 @@ function drawSecondaryRingParticles(
     const alpha = renderTheme.secondaryRings.particleAlpha
       * opacityScale
       * (0.52 + depth * 0.48)
-      * twinkle;
-    const size = particle.size * (0.78 + depth * 0.58);
-    drawStar(context, x, y, size, color, alpha);
+      * twinkle
+      * projection.alphaScale;
+    const size = particle.size * (0.78 + depth * 0.58) * projection.scale;
+    drawStar(
+      context,
+      snapToPixel(projection.x, scene.pixelRatio),
+      snapToPixel(projection.y, scene.pixelRatio),
+      size,
+      color,
+      alpha,
+    );
   }
 }
 
@@ -2327,6 +2759,7 @@ function drawAtmosphericFogLayer(
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
   layer: AtmosphericFogLayer,
+  parallax: ParallaxFrame,
 ) {
   const motionTime = reducedMotion ? 0 : time;
   const fogHeight = scene.height * layer.heightScale;
@@ -2350,48 +2783,61 @@ function drawAtmosphericFogLayer(
   const wispRoll = reducedMotion
     ? 0
     : Math.sin(motionTime * 0.000019 + layer.phase) * 0.018;
-  const layerAlpha = renderTheme.atmosphericFog[layer.stage];
   const centerX = scene.width * layer.centerX + driftX;
   const centerY = scene.height * layer.centerY + driftY;
   const mirror = layer.phase > 3 ? -1 : 1;
-
-  context.save();
-  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
-  context.translate(centerX, centerY);
-  context.rotate(layer.rotation + wispRoll);
-  context.scale(scalePulse, scalePulse);
-
-  context.save();
-  context.scale(mirror, 1);
-  context.globalAlpha =
-    layerAlpha * (1 - layer.activeShare) * opacityBreath * (0.9 + colorRoll * 0.16);
-  context.drawImage(
-    scene.clouds.purple,
-    -fogWidth * 0.53,
-    -fogHeight * 0.5,
-    fogWidth * 1.06,
-    fogHeight,
+  const perspectiveStrength = 0.24 + layer.depth * 0.42;
+  const surface = getDepthFieldSurface(
+    parallax,
+    centerX,
+    centerY,
+    {
+      translationDepth: layer.depth,
+      perspectiveDepth: 1,
+      perspectiveStrength,
+    },
   );
-  context.restore();
+  const layerAlpha = renderTheme.atmosphericFog[layer.stage] * surface.alphaScale;
 
-  context.save();
-  context.translate(
-    Math.cos(motionTime * motionRate * 0.61 + layer.phase) * fogWidth * 0.022,
-    Math.sin(motionTime * motionRate * 0.54 + layer.phase) * fogHeight * 0.035,
-  );
-  context.rotate(-wispRoll * 1.6);
-  context.scale(-mirror, 1);
-  context.globalAlpha =
-    layerAlpha * layer.activeShare * opacityBreath * (1.06 - colorRoll * 0.16);
-  context.drawImage(
-    scene.clouds.active,
-    -fogWidth * 0.48,
-    -fogHeight * 0.46,
-    fogWidth * 0.96,
-    fogHeight * 0.92,
-  );
-  context.restore();
-  context.restore();
+  drawOnDepthFieldSurface(context, surface, () => {
+    context.save();
+    context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+    context.translate(centerX, centerY);
+    context.rotate(layer.rotation + wispRoll);
+    context.scale(scalePulse, scalePulse);
+
+    context.save();
+    context.scale(mirror, 1);
+    context.globalAlpha =
+      layerAlpha * (1 - layer.activeShare) * opacityBreath * (0.9 + colorRoll * 0.16);
+    context.drawImage(
+      scene.clouds.purple,
+      -fogWidth * 0.53,
+      -fogHeight * 0.5,
+      fogWidth * 1.06,
+      fogHeight,
+    );
+    context.restore();
+
+    context.save();
+    context.translate(
+      Math.cos(motionTime * motionRate * 0.61 + layer.phase) * fogWidth * 0.022,
+      Math.sin(motionTime * motionRate * 0.54 + layer.phase) * fogHeight * 0.035,
+    );
+    context.rotate(-wispRoll * 1.6);
+    context.scale(-mirror, 1);
+    context.globalAlpha =
+      layerAlpha * layer.activeShare * opacityBreath * (1.06 - colorRoll * 0.16);
+    context.drawImage(
+      scene.clouds.active,
+      -fogWidth * 0.48,
+      -fogHeight * 0.46,
+      fogWidth * 0.96,
+      fogHeight * 0.92,
+    );
+    context.restore();
+    context.restore();
+  });
 }
 
 function drawAtmosphericFogStage(
@@ -2405,10 +2851,15 @@ function drawAtmosphericFogStage(
 ) {
   for (const layer of ATMOSPHERIC_FOG_LAYERS) {
     if (layer.stage !== stage || (scene.compact && !layer.compactVisible)) continue;
-
-    drawAtParallaxDepth(context, parallax, layer.depth, () => {
-      drawAtmosphericFogLayer(context, scene, time, renderTheme, reducedMotion, layer);
-    });
+    drawAtmosphericFogLayer(
+      context,
+      scene,
+      time,
+      renderTheme,
+      reducedMotion,
+      layer,
+      parallax,
+    );
   }
 }
 
@@ -2419,6 +2870,7 @@ function drawCloudCore(
   activeColor: Rgb,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
+  parallax: ParallaxFrame,
 ) {
   const nebulaAccentColor = getNebulaAccentColor(activeColor);
   const motionTime = reducedMotion ? 0 : time;
@@ -2429,40 +2881,61 @@ function drawCloudCore(
   const driftX = Math.sin(motionTime * 0.000052) * (scene.compact ? 8 : 16);
   const driftY = Math.cos(motionTime * 0.000041) * 9;
   const scalePulse = 1 + Math.sin(motionTime * 0.000036) * 0.025;
+  const cloudX = centerX + driftX;
+  const cloudY = centerY + driftY;
+  const surface = getDepthFieldSurface(
+    parallax,
+    cloudX,
+    cloudY,
+    DEPTH_FIELD_LAYERS.cloudCore,
+  );
 
-  context.save();
-  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
-  context.translate(centerX + driftX, centerY + driftY);
-  context.rotate(-0.055 + Math.sin(motionTime * 0.000021) * 0.018);
-  context.scale(scalePulse, scalePulse);
-  context.globalAlpha = renderTheme.clouds.accentAlpha;
-  context.drawImage(
-    scene.clouds.accent,
-    -cloudWidth * 0.58,
-    -cloudHeight * 0.52,
-    cloudWidth * 1.16,
-    cloudHeight * 1.04,
-  );
-  context.globalAlpha = renderTheme.clouds.activeAlpha;
-  context.drawImage(
-    scene.clouds.active,
-    -cloudWidth * 0.5,
-    -cloudHeight * 0.5,
-    cloudWidth,
-    cloudHeight,
-  );
-  context.restore();
+  drawOnDepthFieldSurface(context, surface, () => {
+    context.save();
+    context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+    context.translate(cloudX, cloudY);
+    context.rotate(-0.055 + Math.sin(motionTime * 0.000021) * 0.018);
+    context.scale(scalePulse, scalePulse);
+    context.globalAlpha = renderTheme.clouds.accentAlpha * surface.alphaScale;
+    context.drawImage(
+      scene.clouds.accent,
+      -cloudWidth * 0.58,
+      -cloudHeight * 0.52,
+      cloudWidth * 1.16,
+      cloudHeight * 1.04,
+    );
+    context.globalAlpha = renderTheme.clouds.activeAlpha * surface.alphaScale;
+    context.drawImage(
+      scene.clouds.active,
+      -cloudWidth * 0.5,
+      -cloudHeight * 0.5,
+      cloudWidth,
+      cloudHeight,
+    );
+    context.restore();
 
-  const glowRadius = Math.max(cloudWidth * 0.42, 160);
-  const glow = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowRadius);
-  glow.addColorStop(
-    0,
-    rgba(mixRgb(activeColor, nebulaAccentColor, 0.44), renderTheme.clouds.glowCoreAlpha),
-  );
-  glow.addColorStop(0.46, rgba(activeColor, renderTheme.clouds.glowMidAlpha));
-  glow.addColorStop(1, rgba(activeColor, 0));
-  context.fillStyle = glow;
-  context.fillRect(centerX - glowRadius, centerY - glowRadius, glowRadius * 2, glowRadius * 2);
+    const glowRadius = Math.max(cloudWidth * 0.42, 160);
+    const glow = context.createRadialGradient(cloudX, cloudY, 0, cloudX, cloudY, glowRadius);
+    glow.addColorStop(
+      0,
+      rgba(
+        mixRgb(activeColor, nebulaAccentColor, 0.44),
+        renderTheme.clouds.glowCoreAlpha * surface.alphaScale,
+      ),
+    );
+    glow.addColorStop(
+      0.46,
+      rgba(activeColor, renderTheme.clouds.glowMidAlpha * surface.alphaScale),
+    );
+    glow.addColorStop(1, rgba(activeColor, 0));
+    context.fillStyle = glow;
+    context.fillRect(
+      cloudX - glowRadius,
+      cloudY - glowRadius,
+      glowRadius * 2,
+      glowRadius * 2,
+    );
+  });
 }
 
 function drawVortex(
@@ -2579,6 +3052,7 @@ function drawForegroundClouds(
   activeColor: Rgb,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
+  parallax: ParallaxFrame,
 ) {
   const motionTime = reducedMotion ? 0 : time;
   const cloudWidth = Math.min(
@@ -2596,49 +3070,71 @@ function drawForegroundClouds(
     : 0.88 + Math.sin(motionTime * 0.00019 + 0.9) * 0.09;
   const cloudX = centerX + driftX;
   const cloudY = centerY + driftY;
+  const surface = getDepthFieldSurface(
+    parallax,
+    cloudX,
+    cloudY,
+    DEPTH_FIELD_LAYERS.foregroundClouds,
+  );
 
-  context.save();
-  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
-  context.translate(cloudX, cloudY);
-  context.rotate(0.045 + Math.sin(motionTime * 0.000017) * 0.012);
-  context.scale(scalePulse, scalePulse);
-  context.globalAlpha = renderTheme.foregroundClouds.purpleAlpha * opacityPulse;
-  context.drawImage(
-    scene.clouds.purple,
-    -cloudWidth * 0.62,
-    -cloudHeight * 0.54,
-    cloudWidth * 1.18,
-    cloudHeight * 1.08,
-  );
-  context.globalAlpha = renderTheme.foregroundClouds.activeAlpha * opacityPulse;
-  context.drawImage(
-    scene.clouds.active,
-    -cloudWidth * 0.52,
-    -cloudHeight * 0.5,
-    cloudWidth * 0.92,
-    cloudHeight,
-  );
-  context.restore();
+  drawOnDepthFieldSurface(context, surface, () => {
+    context.save();
+    context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+    context.translate(cloudX, cloudY);
+    context.rotate(0.045 + Math.sin(motionTime * 0.000017) * 0.012);
+    context.scale(scalePulse, scalePulse);
+    context.globalAlpha = renderTheme.foregroundClouds.purpleAlpha
+      * opacityPulse
+      * surface.alphaScale;
+    context.drawImage(
+      scene.clouds.purple,
+      -cloudWidth * 0.62,
+      -cloudHeight * 0.54,
+      cloudWidth * 1.18,
+      cloudHeight * 1.08,
+    );
+    context.globalAlpha = renderTheme.foregroundClouds.activeAlpha
+      * opacityPulse
+      * surface.alphaScale;
+    context.drawImage(
+      scene.clouds.active,
+      -cloudWidth * 0.52,
+      -cloudHeight * 0.5,
+      cloudWidth * 0.92,
+      cloudHeight,
+    );
+    context.restore();
 
-  const glowColor = mixRgb(activeColor, FOREGROUND_CLOUD_PURPLE, 0.76);
-  const glowRadius = Math.max(cloudWidth * 0.4, 150);
-  context.save();
-  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
-  context.translate(cloudX - cloudWidth * 0.08, cloudY);
-  context.scale(1.55, 0.72);
-  const glow = context.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
-  glow.addColorStop(
-    0,
-    rgba(glowColor, renderTheme.foregroundClouds.glowCoreAlpha * opacityPulse),
-  );
-  glow.addColorStop(
-    0.5,
-    rgba(FOREGROUND_CLOUD_PURPLE, renderTheme.foregroundClouds.glowMidAlpha * opacityPulse),
-  );
-  glow.addColorStop(1, rgba(FOREGROUND_CLOUD_PURPLE, 0));
-  context.fillStyle = glow;
-  context.fillRect(-glowRadius, -glowRadius, glowRadius * 2, glowRadius * 2);
-  context.restore();
+    const glowColor = mixRgb(activeColor, FOREGROUND_CLOUD_PURPLE, 0.76);
+    const glowRadius = Math.max(cloudWidth * 0.4, 150);
+    context.save();
+    context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+    context.translate(cloudX - cloudWidth * 0.08, cloudY);
+    context.scale(1.55, 0.72);
+    const glow = context.createRadialGradient(0, 0, 0, 0, 0, glowRadius);
+    glow.addColorStop(
+      0,
+      rgba(
+        glowColor,
+        renderTheme.foregroundClouds.glowCoreAlpha
+          * opacityPulse
+          * surface.alphaScale,
+      ),
+    );
+    glow.addColorStop(
+      0.5,
+      rgba(
+        FOREGROUND_CLOUD_PURPLE,
+        renderTheme.foregroundClouds.glowMidAlpha
+          * opacityPulse
+          * surface.alphaScale,
+      ),
+    );
+    glow.addColorStop(1, rgba(FOREGROUND_CLOUD_PURPLE, 0));
+    context.fillStyle = glow;
+    context.fillRect(-glowRadius, -glowRadius, glowRadius * 2, glowRadius * 2);
+    context.restore();
+  });
 }
 
 function drawRingParticles(
@@ -2648,11 +3144,13 @@ function drawRingParticles(
   activeColor: Rgb,
   renderTheme: CosmicRenderTheme,
   reducedMotion: boolean,
+  parallax: ParallaxFrame,
 ) {
   const { orbit } = scene;
   const cosTilt = Math.cos(orbit.tilt);
   const sinTilt = Math.sin(orbit.tilt);
   const motionTime = reducedMotion ? 0 : time;
+  const projection: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
 
   for (const particle of scene.ringParticles) {
     const angle = particle.angle + motionTime * particle.speed;
@@ -2661,6 +3159,15 @@ function drawRingParticles(
     const localY = Math.sin(angle) * orbit.radiusY * laneScale;
     const x = orbit.centerX + localX * cosTilt - localY * sinTilt;
     const y = orbit.centerY + localX * sinTilt + localY * cosTilt;
+    projectAtParallaxDepth(
+      parallax,
+      x,
+      y,
+      DEPTH_FIELD_LAYERS.mainRing.translationDepth,
+      DEPTH_FIELD_LAYERS.mainRing.perspectiveDepth,
+      DEPTH_FIELD_LAYERS.mainRing.perspectiveStrength,
+      projection,
+    );
     const depth = (Math.sin(angle) + 1) * 0.5;
     const twinkle = reducedMotion ? 0.78 : 0.68 + Math.sin(time * 0.0016 + particle.phase) * 0.3;
     const color = getAnimatedStarColor(
@@ -2671,9 +3178,12 @@ function drawRingParticles(
       renderTheme.neutralStarColor,
       0.82,
     );
-    const alpha = renderTheme.ringParticleAlpha * (0.5 + depth * 0.5) * twinkle;
-    const size = particle.size * (0.84 + depth * 0.76);
-    drawStar(context, x, y, size, color, alpha);
+    const alpha = renderTheme.ringParticleAlpha
+      * (0.5 + depth * 0.5)
+      * twinkle
+      * projection.alphaScale;
+    const size = particle.size * (0.84 + depth * 0.76) * projection.scale;
+    drawStar(context, projection.x, projection.y, size, color, alpha);
   }
 }
 
@@ -2685,12 +3195,16 @@ function drawPlanetRing(
   color: Rgb,
   renderTheme: CosmicRenderTheme,
   phase: number,
+  viewPose: ParallaxPose,
   foreground: boolean,
 ) {
+  const pitch = Math.sin(viewPose.pitch);
+  const yaw = Math.sin(viewPose.yaw);
   context.save();
   context.translate(x, y);
-  context.rotate(0.32 + phase * 0.025);
-  context.scale(1, 0.34);
+  context.rotate(0.32 + phase * 0.025 + yaw * 0.8);
+  applyParallaxPlaneTilt(context, viewPose, 0.75);
+  context.scale(1, clamp(0.34 + pitch * 0.9, 0.2, 0.5));
   for (let ring = 0; ring < 3; ring += 1) {
     const ringScale = 0.9 + ring * 0.1;
     const baseAlpha = foreground
@@ -2724,15 +3238,20 @@ function drawPlanetSurface(
   shadowColor: Rgb,
   renderTheme: CosmicRenderTheme,
   phase: number,
+  viewPose: ParallaxPose,
 ) {
   const { planetSurface } = renderTheme;
   const featureAlpha = planetSurface.featureAlpha;
+  const pitch = Math.sin(viewPose.pitch);
+  const yaw = Math.sin(viewPose.yaw);
   context.save();
   context.translate(x, y);
-  context.rotate(-0.14 + phase * 0.035);
   context.beginPath();
   context.arc(0, 0, radius, 0, TAU);
   context.clip();
+  context.rotate(-0.14 + phase * 0.035 + yaw * 0.24);
+  context.transform(1, pitch * 0.18, yaw * 0.12, 1, 0, 0);
+  context.translate(yaw * radius * 0.72, pitch * radius * 0.62);
 
   if (kind === 'violet') {
     for (let band = -4; band <= 4; band += 1) {
@@ -2831,6 +3350,7 @@ function drawPlanet(
   ringed: boolean,
   phase: number,
   kind: PlanetKind,
+  viewPose: ParallaxPose,
 ) {
   const palette = PLANET_PALETTES[kind];
   const highlightColor = mixRgb(palette.highlight, activeColor, 0.06);
@@ -2843,12 +3363,16 @@ function drawPlanet(
     : kind === 'ice'
       ? renderTheme.planetAtmosphere.iceAlpha
       : renderTheme.planetAtmosphere.standardAlpha;
+  const pitch = Math.sin(viewPose.pitch);
+  const yaw = Math.sin(viewPose.yaw);
 
-  if (ringed) drawPlanetRing(context, x, y, radius, rimColor, renderTheme, phase, false);
+  if (ringed) {
+    drawPlanetRing(context, x, y, radius, rimColor, renderTheme, phase, viewPose, false);
+  }
 
   const gradient = context.createRadialGradient(
-    x - radius * 0.32,
-    y - radius * 0.36,
+    x - radius * 0.32 + yaw * radius * 0.78,
+    y - radius * 0.36 + pitch * radius * 0.7,
     radius * 0.06,
     x,
     y,
@@ -2874,6 +3398,7 @@ function drawPlanet(
     shadowColor,
     renderTheme,
     phase,
+    viewPose,
   );
 
   context.strokeStyle = rgba(rimColor, atmosphereAlpha);
@@ -2890,7 +3415,27 @@ function drawPlanet(
     context.stroke();
   }
 
-  if (ringed) drawPlanetRing(context, x, y, radius, rimColor, renderTheme, phase, true);
+  const tiltMagnitude = Math.hypot(viewPose.pitch, viewPose.yaw);
+  if (tiltMagnitude > 0.002) {
+    const facingAngle = Math.atan2(pitch, yaw);
+    const directionalAlpha = atmosphereAlpha * clamp(tiltMagnitude / 0.2, 0, 0.62);
+    context.strokeStyle = rgba(highlightColor, directionalAlpha);
+    context.lineWidth = Math.max(0.85, radius * 0.052);
+    context.lineCap = 'round';
+    context.beginPath();
+    context.arc(
+      x,
+      y,
+      radius + context.lineWidth * 0.42,
+      facingAngle - 1.02,
+      facingAngle + 1.02,
+    );
+    context.stroke();
+  }
+
+  if (ringed) {
+    drawPlanetRing(context, x, y, radius, rimColor, renderTheme, phase, viewPose, true);
+  }
 }
 
 function getPlanetRenderStates(
@@ -2909,6 +3454,7 @@ function getPlanetRenderStates(
     let x: number;
     let y: number;
     let radius = minDimension * planet.size;
+    let orientationDepth: number | undefined;
 
     if (planet.motion === 'orbit') {
       const angle = planet.angle + motionTime * planet.speed * planet.direction;
@@ -2917,8 +3463,9 @@ function getPlanetRenderStates(
       const localY = Math.sin(angle) * orbit.radiusY * laneScale;
       x = orbit.centerX + localX * cosTilt - localY * sinTilt;
       y = orbit.centerY + localX * sinTilt + localY * cosTilt;
-      const depth = (Math.sin(angle) + 1) * 0.5;
-      radius *= 0.82 + depth * 0.28;
+      const orbitDepth = (Math.sin(angle) + 1) * 0.5;
+      radius *= 0.82 + orbitDepth * 0.28;
+      orientationDepth = 0.32 + orbitDepth * 0.28;
     } else {
       const offscreenMargin = radius * 2.4;
       const travelWidth = scene.width + offscreenMargin * 2;
@@ -2931,10 +3478,37 @@ function getPlanetRenderStates(
     const parallaxDepth = planet.kind === 'violet'
       ? PARALLAX_DEPTH.distant
       : PARALLAX_DEPTH.middle;
-    x += getParallaxOffsetX(parallax, parallaxDepth);
-    y += getParallaxOffsetY(parallax, parallaxDepth);
+    const viewPose = getParallaxPose(
+      parallax,
+      parallaxDepth,
+      PLANET_PARALLAX_TILT_SCALE,
+      orientationDepth ?? parallaxDepth,
+    );
+    if (planet.motion === 'orbit') {
+      const projection: DepthFieldProjection = {
+        x,
+        y,
+        scale: 1,
+        alphaScale: 1,
+      };
+      projectAtParallaxDepth(
+        parallax,
+        x,
+        y,
+        DEPTH_FIELD_LAYERS.mainRing.translationDepth,
+        DEPTH_FIELD_LAYERS.mainRing.perspectiveDepth,
+        DEPTH_FIELD_LAYERS.mainRing.perspectiveStrength,
+        projection,
+      );
+      x = projection.x;
+      y = projection.y;
+      radius *= projection.scale;
+    } else {
+      x += viewPose.offsetX;
+      y += viewPose.offsetY;
+    }
 
-    return { planet, x, y, radius, surfacePhase };
+    return { planet, x, y, radius, surfacePhase, viewPose };
   });
 
   const collisionPadding = minDimension * 0.016;
@@ -2974,17 +3548,12 @@ function getPlanetRenderStates(
 
 function drawPlanets(
   context: CanvasRenderingContext2D,
-  scene: Scene,
-  time: number,
+  states: readonly PlanetRenderState[],
   activeColor: Rgb,
   renderTheme: CosmicRenderTheme,
-  reducedMotion: boolean,
   layer: PlanetLayer,
-  parallax: ParallaxFrame,
 ) {
-  const states = getPlanetRenderStates(scene, time, reducedMotion, parallax);
-
-  for (const { planet, x, y, radius, surfacePhase } of states) {
+  for (const { planet, x, y, radius, surfacePhase, viewPose } of states) {
     const belongsToLayer = layer === 'distant-rogue'
       ? planet.motion === 'rogue' && planet.kind === 'violet'
       : layer === 'rogue'
@@ -3020,6 +3589,7 @@ function drawPlanets(
       planet.ringed,
       surfacePhase,
       planet.kind,
+      viewPose,
     );
     context.restore();
   }
@@ -3032,11 +3602,16 @@ function drawScene(
   activeColor: Rgb,
   isDark: boolean,
   reducedMotion: boolean,
-  parallaxPositionX: number,
-  parallaxPositionY: number,
+  parallax: ParallaxFrame,
 ) {
   const renderTheme = isDark ? COSMIC_RENDER_THEMES.dark : COSMIC_RENDER_THEMES.light;
-  const parallax = createParallaxFrame(scene, parallaxPositionX, parallaxPositionY);
+  const planetStates = getPlanetRenderStates(scene, time, reducedMotion, parallax);
+  const mainRingSurface = getDepthFieldSurface(
+    parallax,
+    scene.orbit.centerX,
+    scene.orbit.centerY,
+    DEPTH_FIELD_LAYERS.mainRing,
+  );
   updateSceneCloudTints(scene.clouds, activeColor);
   context.clearRect(0, 0, scene.width, scene.height);
   context.globalCompositeOperation = 'source-over';
@@ -3053,38 +3628,38 @@ function drawScene(
   );
   drawPlanets(
     context,
+    planetStates,
+    activeColor,
+    renderTheme,
+    'distant-rogue',
+  );
+  drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.distant, (viewPose) => {
+    drawQuasar(context, scene, time, renderTheme, reducedMotion, viewPose);
+  });
+  drawSecondaryRingSystem(
+    context,
     scene,
+    scene.secondaryRings.distant,
+    time,
+    activeColor,
+    renderTheme.secondaryRings.distantAlpha,
+    renderTheme.secondaryRings.dashAlpha * 0.72,
+    reducedMotion,
+    parallax,
+    DEPTH_FIELD_LAYERS.distantRing,
+  );
+  drawSecondaryRingParticles(
+    context,
+    scene,
+    scene.secondaryRings.distant,
     time,
     activeColor,
     renderTheme,
+    0.72,
     reducedMotion,
-    'distant-rogue',
     parallax,
+    DEPTH_FIELD_LAYERS.distantRing,
   );
-  drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.distant, () => {
-    drawQuasar(context, scene, time, renderTheme, reducedMotion);
-  });
-  drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.far, () => {
-    drawSecondaryRingSystem(
-      context,
-      scene.secondaryRings.distant,
-      time,
-      activeColor,
-      renderTheme.secondaryRings.distantAlpha,
-      renderTheme.secondaryRings.dashAlpha * 0.72,
-      reducedMotion,
-    );
-    drawSecondaryRingParticles(
-      context,
-      scene,
-      scene.secondaryRings.distant,
-      time,
-      activeColor,
-      renderTheme,
-      0.72,
-      reducedMotion,
-    );
-  });
   drawStarClusterSprites(
     context,
     scene,
@@ -3108,37 +3683,39 @@ function drawScene(
   );
   drawPlanets(
     context,
+    planetStates,
+    activeColor,
+    renderTheme,
+    'rogue',
+  );
+  drawOnDepthFieldSurface(context, mainRingSurface, () => {
+    drawMainRingAurora(context, scene, time, activeColor, renderTheme, reducedMotion);
+  });
+  drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion, parallax);
+  drawSecondaryRingSystem(
+    context,
     scene,
+    scene.secondaryRings.inner,
+    time,
+    activeColor,
+    renderTheme.secondaryRings.innerAlpha,
+    renderTheme.secondaryRings.dashAlpha,
+    reducedMotion,
+    parallax,
+    DEPTH_FIELD_LAYERS.mainRing,
+  );
+  drawSecondaryRingParticles(
+    context,
+    scene,
+    scene.secondaryRings.inner,
     time,
     activeColor,
     renderTheme,
+    0.92,
     reducedMotion,
-    'rogue',
     parallax,
+    DEPTH_FIELD_LAYERS.mainRing,
   );
-  drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.middle, () => {
-    drawMainRingAurora(context, scene, time, activeColor, renderTheme, reducedMotion);
-    drawRingTrails(context, scene, time, activeColor, renderTheme, reducedMotion);
-    drawSecondaryRingSystem(
-      context,
-      scene.secondaryRings.inner,
-      time,
-      activeColor,
-      renderTheme.secondaryRings.innerAlpha,
-      renderTheme.secondaryRings.dashAlpha,
-      reducedMotion,
-    );
-    drawSecondaryRingParticles(
-      context,
-      scene,
-      scene.secondaryRings.inner,
-      time,
-      activeColor,
-      renderTheme,
-      0.92,
-      reducedMotion,
-    );
-  });
   drawStarClusterSprites(
     context,
     scene,
@@ -3149,10 +3726,8 @@ function drawScene(
     'ring',
     parallax,
   );
-  drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.near, () => {
-    drawCloudCore(context, scene, time, activeColor, renderTheme, reducedMotion);
-  });
-  drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.middle, () => {
+  drawCloudCore(context, scene, time, activeColor, renderTheme, reducedMotion, parallax);
+  drawOnDepthFieldSurface(context, mainRingSurface, () => {
     drawVortex(context, scene, time, activeColor, renderTheme, reducedMotion);
   });
   drawStarClusterHighlights(
@@ -3175,9 +3750,15 @@ function drawScene(
     'ring',
     parallax,
   );
-  drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.middle, () => {
-    drawRingParticles(context, scene, time, activeColor, renderTheme, reducedMotion);
-  });
+  drawRingParticles(
+    context,
+    scene,
+    time,
+    activeColor,
+    renderTheme,
+    reducedMotion,
+    parallax,
+  );
   drawAtmosphericFogStage(
     context,
     scene,
@@ -3187,18 +3768,21 @@ function drawScene(
     'near',
     parallax,
   );
-  drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.foreground, () => {
-    drawForegroundClouds(context, scene, time, activeColor, renderTheme, reducedMotion);
-  });
-  drawPlanets(
+  drawForegroundClouds(
     context,
     scene,
     time,
     activeColor,
     renderTheme,
     reducedMotion,
-    'orbit',
     parallax,
+  );
+  drawPlanets(
+    context,
+    planetStates,
+    activeColor,
+    renderTheme,
+    'orbit',
   );
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
@@ -3219,7 +3803,8 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
-    if (!canvas || !context) return;
+    const background = canvas?.parentElement;
+    if (!canvas || !context || !background) return;
     const cloudSprites = createCloudSprites();
     const auroraSprites = createAuroraSprites();
     const quasarSprite = createQuasarSprite();
@@ -3241,6 +3826,8 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     let targetParallaxY = 0;
     let currentParallaxX = 0;
     let currentParallaxY = 0;
+    let styledParallaxX = Number.NaN;
+    let styledParallaxY = Number.NaN;
     const currentColor: Rgb = [...targetColorRef.current];
 
     const paint = (time: number) => {
@@ -3260,6 +3847,20 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
         currentParallaxX += (targetParallaxX - currentParallaxX) * parallaxEase;
         currentParallaxY += (targetParallaxY - currentParallaxY) * parallaxEase;
       }
+      const parallax = createParallaxFrame(
+        scene,
+        currentParallaxX,
+        currentParallaxY,
+      );
+      if (
+        !Number.isFinite(styledParallaxX)
+        || Math.abs(currentParallaxX - styledParallaxX) > 0.0005
+        || Math.abs(currentParallaxY - styledParallaxY) > 0.0005
+      ) {
+        syncEdgeGlowDepth(background, parallax);
+        styledParallaxX = currentParallaxX;
+        styledParallaxY = currentParallaxY;
+      }
       drawScene(
         context,
         scene,
@@ -3267,8 +3868,7 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
         currentColor,
         isDark,
         reducedMotion,
-        currentParallaxX,
-        currentParallaxY,
+        parallax,
       );
     };
 
@@ -3312,6 +3912,8 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
         vortexSprites,
         dpr,
       );
+      styledParallaxX = Number.NaN;
+      styledParallaxY = Number.NaN;
       paint(performance.now());
     };
 
@@ -3396,9 +3998,15 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
   return (
     <div className="ambient-background" aria-hidden="true">
       <div className="ambient-edge-glows">
-        <span className="ambient-edge-glow ambient-edge-glow-top-left" />
-        <span className="ambient-edge-glow ambient-edge-glow-top-right" />
-        <span className="ambient-edge-glow ambient-edge-glow-bottom-right" />
+        <span className="ambient-edge-glow-depth ambient-edge-glow-depth-top-left">
+          <span className="ambient-edge-glow ambient-edge-glow-top-left" />
+        </span>
+        <span className="ambient-edge-glow-depth ambient-edge-glow-depth-top-right">
+          <span className="ambient-edge-glow ambient-edge-glow-top-right" />
+        </span>
+        <span className="ambient-edge-glow-depth ambient-edge-glow-depth-bottom-right">
+          <span className="ambient-edge-glow ambient-edge-glow-bottom-right" />
+        </span>
       </div>
       <canvas ref={canvasRef} className="cosmic-canvas" />
     </div>
