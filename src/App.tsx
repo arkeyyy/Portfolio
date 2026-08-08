@@ -16,6 +16,7 @@ import type { SectionId } from './sectionTheme';
 function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('about');
   const [isInterfaceHidden, setIsInterfaceHidden] = useState(false);
+  const [isBackgroundHintVisible, setIsBackgroundHintVisible] = useState(false);
 
   useEffect(() => {
     const observerOptions = {
@@ -66,12 +67,21 @@ function App() {
     }
 
     const revealFromClick = (event: MouseEvent) => {
-      if (event.button === 0) setIsInterfaceHidden(false);
+      if (event.button === 0) {
+        setIsBackgroundHintVisible(false);
+        setIsInterfaceHidden(false);
+      }
     };
     const revealFromKeyboard = (event: KeyboardEvent) => {
-      if (event.key === ' ' || event.key.startsWith('Arrow') || event.key === 'PageDown' || event.key === 'PageUp') {
+      if (
+        event.key === ' '
+        || event.key.startsWith('Arrow')
+        || event.key === 'PageDown'
+        || event.key === 'PageUp'
+      ) {
         event.preventDefault();
       }
+      setIsBackgroundHintVisible(false);
       setIsInterfaceHidden(false);
     };
 
@@ -82,6 +92,23 @@ function App() {
       root.classList.remove('background-view-active');
       window.removeEventListener('click', revealFromClick, true);
       window.removeEventListener('keydown', revealFromKeyboard, true);
+    };
+  }, [isInterfaceHidden]);
+
+  useEffect(() => {
+    if (!isInterfaceHidden) return;
+
+    let timeout: number | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      setIsBackgroundHintVisible(true);
+      timeout = window.setTimeout(() => {
+        setIsBackgroundHintVisible(false);
+      }, 1320);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timeout !== undefined) window.clearTimeout(timeout);
     };
   }, [isInterfaceHidden]);
 
@@ -108,7 +135,10 @@ function App() {
       >
         <Navbar
           activeSection={activeSection}
-          onHideInterface={() => setIsInterfaceHidden(true)}
+          onHideInterface={() => {
+            setIsBackgroundHintVisible(false);
+            setIsInterfaceHidden(true);
+          }}
         />
 
         <div className="site-content">
@@ -125,11 +155,16 @@ function App() {
         </div>
       </div>
 
-      <p className="interface-status" role="status" aria-live="polite">
-        {isInterfaceHidden
-          ? 'Interface hidden. Click or press any key to restore it.'
-          : ''}
-      </p>
+      {isInterfaceHidden && (
+        <div
+          className={`background-view-hint ${isBackgroundHintVisible ? 'is-visible' : ''}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          Press any key to show UI
+        </div>
+      )}
     </div>
   );
 }
