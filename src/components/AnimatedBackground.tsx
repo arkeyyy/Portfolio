@@ -355,10 +355,24 @@ type EdgeGlowDepthSpec = {
   perspectiveStrength: number;
 };
 
+type DeviceOrientationPermissionState =
+  | 'unavailable'
+  | 'prompt'
+  | 'requesting'
+  | 'granted'
+  | 'denied';
+
+type DeviceOrientationEventConstructor = {
+  requestPermission?: () => Promise<'granted' | 'denied'>;
+};
+
 const TAU = Math.PI * 2;
 const STAR_COLOR_FADE_MS = 1500;
 const SECTION_COLOR_EASE_MS = 520;
 const PARALLAX_EASE_MS = 260;
+const DEVICE_TILT_DEAD_ZONE = 1.25;
+const DEVICE_TILT_RANGE_X = 18;
+const DEVICE_TILT_RANGE_Y = 22;
 // Depth 0 stays fixed. Depth 1 receives the full foreground camera offset.
 // New scene objects can use a semantic token here or pass a custom depth to the helper.
 const PARALLAX_DEPTH = {
@@ -643,6 +657,34 @@ function seededRandom(seed: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeDeviceTilt(delta: number, range: number) {
+  const magnitude = Math.abs(delta);
+  if (magnitude <= DEVICE_TILT_DEAD_ZONE) return 0;
+
+  return clamp(
+    Math.sign(delta)
+      * (magnitude - DEVICE_TILT_DEAD_ZONE)
+      / Math.max(range - DEVICE_TILT_DEAD_ZONE, 1),
+    -1,
+    1,
+  );
+}
+
+function getShortestAngleDelta(value: number, baseline: number) {
+  return ((value - baseline + 540) % 360) - 180;
+}
+
+function getScreenRelativeDeviceTilt(beta: number, gamma: number) {
+  const fallbackOrientation = (window as Window & { orientation?: number }).orientation;
+  const rawAngle = window.screen.orientation?.angle ?? fallbackOrientation ?? 0;
+  const angle = ((rawAngle % 360) + 360) % 360;
+
+  if (angle === 90) return { x: beta, y: -gamma };
+  if (angle === 180) return { x: -gamma, y: -beta };
+  if (angle === 270) return { x: -beta, y: gamma };
+  return { x: gamma, y: beta };
 }
 
 function createParallaxFrame(
@@ -3817,6 +3859,11 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const coarsePointer = window.matchMedia('(pointer: coarse)');
     const parallaxPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const deviceOrientationConstructor = (
+      window as typeof window & {
+        DeviceOrientationEvent?: DeviceOrientationEventConstructor;
+      }
+    ).DeviceOrientationEvent;
     let scene: Scene | null = null;
     let animationFrame = 0;
     let resizeFrame = 0;
@@ -3831,7 +3878,146 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     let currentParallaxY = 0;
     let styledParallaxX = Number.NaN;
     let styledParallaxY = Number.NaN;
+    let deviceTiltListening = false;
+    let deviceTiltBaselineX: number | null = null;
+    let deviceTiltBaselineY: number | null = null;
+    let tiltPermissionGestureArmed = false;
+    let deviceOrientationPermission: DeviceOrientationPermissionState =
+      !deviceOrientationConstructor
+        ? 'unavailable'
+        : typeof deviceOrientationConstructor.requestPermission === 'function'
+          ? 'prompt'
+          : 'granted';
     const currentColor: Rgb = [...targetColorRef.current];
+
+    const resetDeviceTiltCalibration = () => {
+      deviceTiltBaselineX = null;
+      deviceTiltBaselineY = null;
+      if (!parallaxPointer.matches) {
+        targetParallaxX = 0;
+        targetParallaxY = 0;
+      }
+    };
+
+    const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+      if (
+        reducedMotion
+        || document.hidden
+        || parallaxPointer.matches
+        || !coarsePointer.matches
+        || event.beta === null
+        || event.gamma === null
+      ) {
+        return;
+      }
+
+      const tilt = getScreenRelativeDeviceTilt(event.beta, event.gamma);
+      if (deviceTiltBaselineX === null || deviceTiltBaselineY === null) {
+        deviceTiltBaselineX = tilt.x;
+        deviceTiltBaselineY = tilt.y;
+        targetParallaxX = 0;
+        targetParallaxY = 0;
+        return;
+      }
+
+      targetParallaxX = normalizeDeviceTilt(
+        getShortestAngleDelta(tilt.x, deviceTiltBaselineX),
+        DEVICE_TILT_RANGE_X,
+      );
+      targetParallaxY = normalizeDeviceTilt(
+        getShortestAngleDelta(tilt.y, deviceTiltBaselineY),
+        DEVICE_TILT_RANGE_Y,
+      );
+    };
+
+    const startDeviceTilt = () => {
+      if (
+        deviceTiltListening
+        || deviceOrientationPermission !== 'granted'
+        || reducedMotion
+        || document.hidden
+        || parallaxPointer.matches
+        || !coarsePointer.matches
+      ) {
+        return;
+      }
+
+      resetDeviceTiltCalibration();
+      window.addEventListener('deviceorientation', handleDeviceOrientation, {
+        passive: true,
+      });
+      deviceTiltListening = true;
+    };
+
+    const stopDeviceTilt = () => {
+      if (deviceTiltListening) {
+        window.removeEventListener('deviceorientation', handleDeviceOrientation);
+        deviceTiltListening = false;
+      }
+      resetDeviceTiltCalibration();
+    };
+
+    const handleTiltPermissionGesture = () => {
+      if (
+        deviceOrientationPermission !== 'prompt'
+        || !deviceOrientationConstructor?.requestPermission
+      ) {
+        return;
+      }
+
+      tiltPermissionGestureArmed = false;
+      window.removeEventListener('pointerdown', handleTiltPermissionGesture);
+      deviceOrientationPermission = 'requesting';
+      void deviceOrientationConstructor.requestPermission()
+        .then((permission) => {
+          deviceOrientationPermission = permission;
+          if (permission === 'granted') startDeviceTilt();
+        })
+        .catch(() => {
+          deviceOrientationPermission = 'denied';
+        });
+    };
+
+    const armTiltPermissionGesture = () => {
+      if (
+        tiltPermissionGestureArmed
+        || deviceOrientationPermission !== 'prompt'
+      ) {
+        return;
+      }
+
+      window.addEventListener('pointerdown', handleTiltPermissionGesture, {
+        passive: true,
+      });
+      tiltPermissionGestureArmed = true;
+    };
+
+    const disarmTiltPermissionGesture = () => {
+      if (!tiltPermissionGestureArmed) return;
+      window.removeEventListener('pointerdown', handleTiltPermissionGesture);
+      tiltPermissionGestureArmed = false;
+    };
+
+    const configureDeviceTilt = () => {
+      const shouldUseDeviceTilt = Boolean(deviceOrientationConstructor)
+        && coarsePointer.matches
+        && !parallaxPointer.matches
+        && !reducedMotion
+        && !document.hidden;
+
+      if (!shouldUseDeviceTilt) {
+        disarmTiltPermissionGesture();
+        stopDeviceTilt();
+        return;
+      }
+
+      if (deviceOrientationPermission === 'granted') {
+        disarmTiltPermissionGesture();
+        startDeviceTilt();
+      } else if (deviceOrientationPermission === 'prompt') {
+        armTiltPermissionGesture();
+      }
+    };
 
     const paint = (time: number) => {
       if (!scene) return;
@@ -3842,7 +4028,10 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       currentColor[0] += (targetColorRef.current[0] - currentColor[0]) * colorEase;
       currentColor[1] += (targetColorRef.current[1] - currentColor[1]) * colorEase;
       currentColor[2] += (targetColorRef.current[2] - currentColor[2]) * colorEase;
-      if (reducedMotion || !parallaxPointer.matches) {
+      if (
+        reducedMotion
+        || (!parallaxPointer.matches && !deviceTiltListening)
+      ) {
         currentParallaxX = 0;
         currentParallaxY = 0;
       } else {
@@ -3952,7 +4141,23 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     };
 
     const handleParallaxCapabilityChange = () => {
-      if (!parallaxPointer.matches) resetParallax();
+      resetParallax();
+      configureDeviceTilt();
+    };
+
+    const handleCoarsePointerChange = () => {
+      resetParallax();
+      configureDeviceTilt();
+      scheduleResize();
+    };
+
+    const handleScreenOrientationChange = () => {
+      resetDeviceTiltCalibration();
+    };
+
+    const handleWindowBlur = () => {
+      resetParallax();
+      resetDeviceTiltCalibration();
     };
 
     const handleMotionPreference = () => {
@@ -3966,10 +4171,14 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
         currentColor[1] = targetColorRef.current[1];
         currentColor[2] = targetColorRef.current[2];
       }
+      configureDeviceTilt();
       startAnimation();
     };
 
-    const handleVisibility = () => startAnimation();
+    const handleVisibility = () => {
+      configureDeviceTilt();
+      startAnimation();
+    };
     const handleThemeChange = () => {
       isDark = document.documentElement.classList.contains('dark');
       if (reducedMotion) paint(performance.now());
@@ -3989,10 +4198,14 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     motionPreference.addEventListener('change', handleMotionPreference);
     parallaxPointer.addEventListener('change', handleParallaxCapabilityChange);
+    coarsePointer.addEventListener('change', handleCoarsePointerChange);
+    window.screen.orientation?.addEventListener('change', handleScreenOrientationChange);
+    window.addEventListener('orientationchange', handleScreenOrientationChange);
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('blur', resetParallax);
+    window.addEventListener('blur', handleWindowBlur);
     document.documentElement.addEventListener('pointerleave', resetParallax);
     document.addEventListener('visibilitychange', handleVisibility);
+    configureDeviceTilt();
     resize();
     startAnimation();
 
@@ -4003,10 +4216,15 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       themeObserver.disconnect();
       motionPreference.removeEventListener('change', handleMotionPreference);
       parallaxPointer.removeEventListener('change', handleParallaxCapabilityChange);
+      coarsePointer.removeEventListener('change', handleCoarsePointerChange);
+      window.screen.orientation?.removeEventListener('change', handleScreenOrientationChange);
+      window.removeEventListener('orientationchange', handleScreenOrientationChange);
       window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('blur', resetParallax);
+      window.removeEventListener('blur', handleWindowBlur);
       document.documentElement.removeEventListener('pointerleave', resetParallax);
       document.removeEventListener('visibilitychange', handleVisibility);
+      disarmTiltPermissionGesture();
+      stopDeviceTilt();
       redrawStaticSceneRef.current = null;
     };
   }, []);
