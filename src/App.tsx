@@ -9,10 +9,18 @@ import ContactPage from './components/ContactPage';
 import Footer from './components/Footer';
 import RenderDarkMode from './components/DarkMode/RenderDarkMode';
 import RenderLightMode from './components/LightMode/RenderLightMode';
-import { useState, useEffect, useLayoutEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { isSectionId, sectionById, sections } from './sectionTheme';
 import type { SectionId } from './sectionTheme';
+import type {
+  DarkRendererSnapshot,
+  DeviceOrientationSession,
+  DeviceOrientationSessionState,
+  LightRendererSnapshot,
+  RendererSession,
+} from './components/backgroundRendererSession';
+import { requestDeviceOrientationPermission } from './components/backgroundRendererSession';
 
 const THEME_STORAGE_KEY = 'aldrin-portfolio-theme';
 const DARK_THEME_COLOR = '#0b0c0f';
@@ -34,6 +42,47 @@ function getInitialTheme() {
 }
 
 function App() {
+  const darkRendererSnapshotRef = useRef<DarkRendererSnapshot | null>(null);
+  const lightRendererSnapshotRef = useRef<LightRendererSnapshot | null>(null);
+  const deviceOrientationStateRef = useRef<DeviceOrientationSessionState>({
+    status: 'unresolved',
+    pendingRequest: null,
+  });
+  const darkRendererSession = useMemo<RendererSession<DarkRendererSnapshot>>(
+    () => ({
+      readSnapshot: () => darkRendererSnapshotRef.current,
+      writeSnapshot: (snapshot) => {
+        darkRendererSnapshotRef.current = snapshot;
+      },
+    }),
+    [],
+  );
+  const lightRendererSession = useMemo<RendererSession<LightRendererSnapshot>>(
+    () => ({
+      readSnapshot: () => lightRendererSnapshotRef.current,
+      writeSnapshot: (snapshot) => {
+        lightRendererSnapshotRef.current = snapshot;
+      },
+    }),
+    [],
+  );
+  const deviceOrientationSession = useMemo<DeviceOrientationSession>(
+    () => ({
+      getStatus: () => deviceOrientationStateRef.current.status,
+      getPendingRequest: () => deviceOrientationStateRef.current.pendingRequest,
+      requestPermission: (requestPermission) => requestDeviceOrientationPermission(
+        deviceOrientationStateRef.current,
+        requestPermission,
+      ),
+      recoverOrphanedRequest: () => {
+        const state = deviceOrientationStateRef.current;
+        if (state.status === 'requesting' && !state.pendingRequest) {
+          state.status = 'unresolved';
+        }
+      },
+    }),
+    [],
+  );
   const [activeSection, setActiveSection] = useState<SectionId>('about');
   const [isDarkMode, setIsDarkMode] = useState(getInitialTheme);
   const [isInterfaceHidden, setIsInterfaceHidden] = useState(false);
@@ -174,9 +223,17 @@ function App() {
         Skip to content
       </a>
       {isLightModeActive ? (
-        <RenderLightMode activeColor={activeTheme.color} />
+        <RenderLightMode
+          activeColor={activeTheme.color}
+          session={lightRendererSession}
+          deviceOrientationSession={deviceOrientationSession}
+        />
       ) : (
-        <RenderDarkMode activeColor={activeTheme.color} />
+        <RenderDarkMode
+          activeColor={activeTheme.color}
+          session={darkRendererSession}
+          deviceOrientationSession={deviceOrientationSession}
+        />
       )}
 
       <div

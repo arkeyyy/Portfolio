@@ -1,7 +1,20 @@
 import { useEffect, useRef } from 'react';
+import {
+  RENDERER_SNAPSHOT_VERSION,
+  cloneRendererRgb,
+  isRendererCameraSnapshot,
+  isRendererRgbSnapshot,
+} from '../backgroundRendererSession';
+import type {
+  DeviceOrientationSession,
+  LightRendererSnapshot,
+  RendererSession,
+} from '../backgroundRendererSession';
 
 type RenderLightModeProps = {
   activeColor: string;
+  session: RendererSession<LightRendererSnapshot>;
+  deviceOrientationSession: DeviceOrientationSession;
 };
 
 type Rgb = [number, number, number];
@@ -926,7 +939,11 @@ function drawScene(
   context.globalCompositeOperation = 'source-over';
 }
 
-export default function RenderLightMode({ activeColor }: RenderLightModeProps) {
+export default function RenderLightMode({
+  activeColor,
+  session,
+  deviceOrientationSession,
+}: RenderLightModeProps) {
   const backgroundRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const targetColorRef = useRef<Rgb>([...DEFAULT_ACTIVE_COLOR]);
@@ -951,6 +968,59 @@ export default function RenderLightMode({ activeColor }: RenderLightModeProps) {
     const deviceOrientationConstructor = (
       window as typeof window & { DeviceOrientationEvent?: DeviceOrientationEventConstructor }
     ).DeviceOrientationEvent;
+    const snapshotCandidate = session.readSnapshot();
+    const restoredSnapshot = snapshotCandidate
+      && snapshotCandidate.version === RENDERER_SNAPSHOT_VERSION
+      && Number.isFinite(snapshotCandidate.capturedAtMs)
+      && Number.isFinite(snapshotCandidate.sceneTimeMs)
+      && snapshotCandidate.sceneTimeMs >= 0
+      && Number.isFinite(snapshotCandidate.color.transitionElapsedMs)
+      && snapshotCandidate.color.transitionElapsedMs >= 0
+      && isRendererRgbSnapshot(snapshotCandidate.color.current)
+      && isRendererRgbSnapshot(snapshotCandidate.color.from)
+      && isRendererRgbSnapshot(snapshotCandidate.color.target)
+      && isRendererCameraSnapshot(snapshotCandidate.camera)
+      ? snapshotCandidate
+      : null;
+    const restoreTimestamp = Date.now();
+    const inactiveElapsed = restoredSnapshot
+      ? Math.max(0, restoreTimestamp - restoredSnapshot.capturedAtMs)
+      : 0;
+    const restoreRgb = (color: readonly number[]): Rgb => [
+      clamp(color[0], 0, 255),
+      clamp(color[1], 0, 255),
+      clamp(color[2], 0, 255),
+    ];
+    const restoredTransitionElapsed = restoredSnapshot
+      ? clamp(
+          restoredSnapshot.color.transitionElapsedMs + inactiveElapsed,
+          0,
+          SECTION_COLOR_DURATION_MS,
+        )
+      : 0;
+    const restoredTransitionProgress = restoredTransitionElapsed
+      / SECTION_COLOR_DURATION_MS;
+    const restoredTransitionEase = 1 - (1 - restoredTransitionProgress) ** 3;
+    const restoredFromColor = restoredSnapshot
+      ? restoreRgb(restoredSnapshot.color.from)
+      : [...targetColorRef.current] as Rgb;
+    const restoredTargetColor = restoredSnapshot
+      ? restoreRgb(restoredSnapshot.color.target)
+      : [...targetColorRef.current] as Rgb;
+    const caughtUpColor: Rgb = restoredSnapshot
+      ? [
+          restoredFromColor[0]
+            + (restoredTargetColor[0] - restoredFromColor[0]) * restoredTransitionEase,
+          restoredFromColor[1]
+            + (restoredTargetColor[1] - restoredFromColor[1]) * restoredTransitionEase,
+          restoredFromColor[2]
+            + (restoredTargetColor[2] - restoredFromColor[2]) * restoredTransitionEase,
+        ]
+      : [...targetColorRef.current] as Rgb;
+    const restoredTargetIsCurrent = restoredSnapshot
+      && targetColorRef.current.every(
+        (channel, index) => Math.abs(channel - restoredTargetColor[index]) <= 0.01,
+      );
     let disposed = false;
     let scene: AtmosphericScene | null = null;
     let animationFrame = 0;
@@ -958,26 +1028,62 @@ export default function RenderLightMode({ activeColor }: RenderLightModeProps) {
     let resizePendingWhileHidden = false;
     let lastPaintTime = 0;
     let previousTime = performance.now();
-    let sceneTime = 0;
+    let sceneTime = restoredSnapshot
+      ? restoredSnapshot.sceneTimeMs + inactiveElapsed
+      : 0;
     let reducedMotion = motionPreference.matches;
-    let targetParallaxX = 0;
-    let targetParallaxY = 0;
-    let currentParallaxX = 0;
-    let currentParallaxY = 0;
+    const canRestorePointerCamera = !reducedMotion && parallaxPointer.matches;
+    const canRestoreTiltCamera = !reducedMotion
+      && coarsePointer.matches
+      && !parallaxPointer.matches;
+    let targetParallaxX = canRestorePointerCamera && restoredSnapshot
+      ? clamp(restoredSnapshot.camera.targetX, -1, 1)
+      : 0;
+    let targetParallaxY = canRestorePointerCamera && restoredSnapshot
+      ? clamp(restoredSnapshot.camera.targetY, -1, 1)
+      : 0;
+    let currentParallaxX = (canRestorePointerCamera || canRestoreTiltCamera)
+      && restoredSnapshot
+      ? clamp(restoredSnapshot.camera.currentX, -1, 1)
+      : 0;
+    let currentParallaxY = (canRestorePointerCamera || canRestoreTiltCamera)
+      && restoredSnapshot
+      ? clamp(restoredSnapshot.camera.currentY, -1, 1)
+      : 0;
     let deviceTiltListening = false;
     let deviceTiltBaselineX: number | null = null;
     let deviceTiltBaselineY: number | null = null;
     let tiltPermissionGestureArmed = false;
+    let observedPermissionRequest: Promise<'granted' | 'denied'> | null = null;
+    const sharedOrientationStatus = deviceOrientationSession.getStatus();
     let deviceOrientationPermission: DeviceOrientationPermissionState =
       !deviceOrientationConstructor
         ? 'unavailable'
         : typeof deviceOrientationConstructor.requestPermission === 'function'
-          ? 'prompt'
+          ? sharedOrientationStatus === 'granted'
+            || sharedOrientationStatus === 'denied'
+            || sharedOrientationStatus === 'requesting'
+            ? sharedOrientationStatus
+            : 'prompt'
           : 'granted';
-    const currentColor: Rgb = [...targetColorRef.current];
-    const transitionFromColor: Rgb = [...currentColor];
-    const transitionTargetColor: Rgb = [...currentColor];
-    let colorTransitionStart = 0;
+    const currentColor: Rgb = reducedMotion
+      ? [...targetColorRef.current]
+      : caughtUpColor;
+    const transitionFromColor: Rgb = reducedMotion
+      ? [...targetColorRef.current]
+      : restoredTargetIsCurrent
+        ? restoredFromColor
+        : [...caughtUpColor];
+    const transitionTargetColor: Rgb = reducedMotion
+      ? [...targetColorRef.current]
+      : restoredTargetIsCurrent
+        ? restoredTargetColor
+        : [...targetColorRef.current];
+    let colorTransitionStart = reducedMotion
+      ? sceneTime
+      : restoredTargetIsCurrent
+        ? sceneTime - restoredTransitionElapsed
+        : sceneTime;
 
     const resetDeviceTiltCalibration = () => {
       deviceTiltBaselineX = null;
@@ -1043,6 +1149,18 @@ export default function RenderLightMode({ activeColor }: RenderLightModeProps) {
       resetDeviceTiltCalibration();
     };
 
+    const observePermissionRequest = (
+      request: Promise<'granted' | 'denied'>,
+    ) => {
+      if (observedPermissionRequest === request) return;
+      observedPermissionRequest = request;
+      void request.then((permission) => {
+        if (disposed) return;
+        deviceOrientationPermission = permission;
+        if (permission === 'granted') startDeviceTilt();
+      });
+    };
+
     const handleTiltPermissionGesture = () => {
       if (
         disposed
@@ -1054,15 +1172,9 @@ export default function RenderLightMode({ activeColor }: RenderLightModeProps) {
       tiltPermissionGestureArmed = false;
       window.removeEventListener('pointerdown', handleTiltPermissionGesture);
       deviceOrientationPermission = 'requesting';
-      void deviceOrientationConstructor.requestPermission()
-        .then((permission) => {
-          if (disposed) return;
-          deviceOrientationPermission = permission;
-          if (permission === 'granted') startDeviceTilt();
-        })
-        .catch(() => {
-          if (!disposed) deviceOrientationPermission = 'denied';
-        });
+      observePermissionRequest(deviceOrientationSession.requestPermission(
+        () => deviceOrientationConstructor.requestPermission!(),
+      ));
     };
 
     const armTiltPermissionGesture = () => {
@@ -1099,6 +1211,15 @@ export default function RenderLightMode({ activeColor }: RenderLightModeProps) {
         startDeviceTilt();
       } else if (deviceOrientationPermission === 'prompt') {
         armTiltPermissionGesture();
+      } else if (deviceOrientationPermission === 'requesting') {
+        const pendingRequest = deviceOrientationSession.getPendingRequest();
+        if (pendingRequest) {
+          observePermissionRequest(pendingRequest);
+        } else {
+          deviceOrientationSession.recoverOrphanedRequest();
+          deviceOrientationPermission = 'prompt';
+          armTiltPermissionGesture();
+        }
       }
     };
 
@@ -1317,6 +1438,27 @@ export default function RenderLightMode({ activeColor }: RenderLightModeProps) {
     if (!reducedMotion) startAnimation();
 
     return () => {
+      session.writeSnapshot({
+        version: RENDERER_SNAPSHOT_VERSION,
+        capturedAtMs: Date.now(),
+        sceneTimeMs: Math.max(0, sceneTime),
+        color: {
+          current: cloneRendererRgb(currentColor),
+          from: cloneRendererRgb(transitionFromColor),
+          target: cloneRendererRgb(transitionTargetColor),
+          transitionElapsedMs: clamp(
+            sceneTime - colorTransitionStart,
+            0,
+            SECTION_COLOR_DURATION_MS,
+          ),
+        },
+        camera: {
+          currentX: clamp(currentParallaxX, -1, 1),
+          currentY: clamp(currentParallaxY, -1, 1),
+          targetX: clamp(targetParallaxX, -1, 1),
+          targetY: clamp(targetParallaxY, -1, 1),
+        },
+      });
       disposed = true;
       window.cancelAnimationFrame(animationFrame);
       window.cancelAnimationFrame(resizeFrame);
@@ -1334,7 +1476,7 @@ export default function RenderLightMode({ activeColor }: RenderLightModeProps) {
       stopDeviceTilt();
       redrawStaticSceneRef.current = null;
     };
-  }, []);
+  }, [deviceOrientationSession, session]);
 
   return (
     <div ref={backgroundRef} className="ambient-background light-atmosphere" aria-hidden="true">

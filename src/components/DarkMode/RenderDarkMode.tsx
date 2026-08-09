@@ -1,4 +1,15 @@
 import { useEffect, useRef } from 'react';
+import {
+  RENDERER_SNAPSHOT_VERSION,
+  cloneRendererRgb,
+  isRendererCameraSnapshot,
+  isRendererRgbSnapshot,
+} from '../backgroundRendererSession';
+import type {
+  DarkRendererSnapshot,
+  DeviceOrientationSession,
+  RendererSession,
+} from '../backgroundRendererSession';
 
 type Rgb = [number, number, number];
 type PlanetKind = 'violet' | 'amber' | 'rocky' | 'ocean' | 'ice';
@@ -5206,9 +5217,15 @@ function drawScene(
 
 type RenderDarkModeProps = {
   activeColor: string;
+  session: RendererSession<DarkRendererSnapshot>;
+  deviceOrientationSession: DeviceOrientationSession;
 };
 
-export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
+export default function RenderDarkMode({
+  activeColor,
+  session,
+  deviceOrientationSession,
+}: RenderDarkModeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const targetColorRef = useRef<Rgb>([...DEFAULT_ACTIVE_COLOR]);
   const redrawStaticSceneRef = useRef<(() => void) | null>(null);
@@ -5247,30 +5264,84 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
         DeviceOrientationEvent?: DeviceOrientationEventConstructor;
       }
     ).DeviceOrientationEvent;
+    const snapshotCandidate = session.readSnapshot();
+    const restoredSnapshot = snapshotCandidate
+      && snapshotCandidate.version === RENDERER_SNAPSHOT_VERSION
+      && Number.isFinite(snapshotCandidate.capturedAtMs)
+      && Number.isFinite(snapshotCandidate.sceneTimeMs)
+      && snapshotCandidate.sceneTimeMs >= 0
+      && isRendererRgbSnapshot(snapshotCandidate.color.current)
+      && isRendererRgbSnapshot(snapshotCandidate.color.target)
+      && isRendererCameraSnapshot(snapshotCandidate.camera)
+      ? snapshotCandidate
+      : null;
+    const restoreTimestamp = Date.now();
+    const inactiveElapsed = restoredSnapshot
+      ? Math.max(0, restoreTimestamp - restoredSnapshot.capturedAtMs)
+      : 0;
+    const restoreRgb = (color: readonly number[]): Rgb => [
+      clamp(color[0], 0, 255),
+      clamp(color[1], 0, 255),
+      clamp(color[2], 0, 255),
+    ];
+    const restoredColor = restoredSnapshot
+      ? restoreRgb(restoredSnapshot.color.current)
+      : [...targetColorRef.current] as Rgb;
+    if (restoredSnapshot) {
+      const restoredTarget = restoreRgb(restoredSnapshot.color.target);
+      const catchUpEase = 1 - Math.exp(-inactiveElapsed / SECTION_COLOR_EASE_MS);
+      for (let index = 0; index < 3; index += 1) {
+        restoredColor[index] += (restoredTarget[index] - restoredColor[index]) * catchUpEase;
+      }
+    }
     let scene: Scene | null = null;
     let animationFrame = 0;
     let resizeFrame = 0;
     let lastPaintTime = 0;
     let previousTime = performance.now();
-    let sceneTime = 0;
+    let sceneTime = restoredSnapshot
+      ? restoredSnapshot.sceneTimeMs + inactiveElapsed
+      : 0;
     let reducedMotion = motionPreference.matches;
-    let targetParallaxX = 0;
-    let targetParallaxY = 0;
-    let currentParallaxX = 0;
-    let currentParallaxY = 0;
+    const canRestorePointerCamera = !reducedMotion && parallaxPointer.matches;
+    const canRestoreTiltCamera = !reducedMotion
+      && coarsePointer.matches
+      && !parallaxPointer.matches;
+    let targetParallaxX = canRestorePointerCamera && restoredSnapshot
+      ? clamp(restoredSnapshot.camera.targetX, -1, 1)
+      : 0;
+    let targetParallaxY = canRestorePointerCamera && restoredSnapshot
+      ? clamp(restoredSnapshot.camera.targetY, -1, 1)
+      : 0;
+    let currentParallaxX = (canRestorePointerCamera || canRestoreTiltCamera)
+      && restoredSnapshot
+      ? clamp(restoredSnapshot.camera.currentX, -1, 1)
+      : 0;
+    let currentParallaxY = (canRestorePointerCamera || canRestoreTiltCamera)
+      && restoredSnapshot
+      ? clamp(restoredSnapshot.camera.currentY, -1, 1)
+      : 0;
     let styledParallaxX = Number.NaN;
     let styledParallaxY = Number.NaN;
+    let disposed = false;
+    let resizePendingWhileHidden = false;
     let deviceTiltListening = false;
     let deviceTiltBaselineX: number | null = null;
     let deviceTiltBaselineY: number | null = null;
     let tiltPermissionGestureArmed = false;
+    let observedPermissionRequest: Promise<'granted' | 'denied'> | null = null;
+    const sharedOrientationStatus = deviceOrientationSession.getStatus();
     let deviceOrientationPermission: DeviceOrientationPermissionState =
       !deviceOrientationConstructor
         ? 'unavailable'
         : typeof deviceOrientationConstructor.requestPermission === 'function'
-          ? 'prompt'
+          ? sharedOrientationStatus === 'granted'
+            || sharedOrientationStatus === 'denied'
+            || sharedOrientationStatus === 'requesting'
+            ? sharedOrientationStatus
+            : 'prompt'
           : 'granted';
-    const currentColor: Rgb = [...targetColorRef.current];
+    const currentColor: Rgb = restoredColor;
 
     const resetDeviceTiltCalibration = () => {
       deviceTiltBaselineX = null;
@@ -5283,7 +5354,8 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
 
     const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
       if (
-        reducedMotion
+        disposed
+        || reducedMotion
         || document.hidden
         || parallaxPointer.matches
         || !coarsePointer.matches
@@ -5314,7 +5386,8 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
 
     const startDeviceTilt = () => {
       if (
-        deviceTiltListening
+        disposed
+        || deviceTiltListening
         || deviceOrientationPermission !== 'granted'
         || reducedMotion
         || document.hidden
@@ -5339,9 +5412,22 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
       resetDeviceTiltCalibration();
     };
 
+    const observePermissionRequest = (
+      request: Promise<'granted' | 'denied'>,
+    ) => {
+      if (observedPermissionRequest === request) return;
+      observedPermissionRequest = request;
+      void request.then((permission) => {
+        if (disposed) return;
+        deviceOrientationPermission = permission;
+        if (permission === 'granted') startDeviceTilt();
+      });
+    };
+
     const handleTiltPermissionGesture = () => {
       if (
-        deviceOrientationPermission !== 'prompt'
+        disposed
+        || deviceOrientationPermission !== 'prompt'
         || !deviceOrientationConstructor?.requestPermission
       ) {
         return;
@@ -5350,19 +5436,15 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
       tiltPermissionGestureArmed = false;
       window.removeEventListener('pointerdown', handleTiltPermissionGesture);
       deviceOrientationPermission = 'requesting';
-      void deviceOrientationConstructor.requestPermission()
-        .then((permission) => {
-          deviceOrientationPermission = permission;
-          if (permission === 'granted') startDeviceTilt();
-        })
-        .catch(() => {
-          deviceOrientationPermission = 'denied';
-        });
+      observePermissionRequest(deviceOrientationSession.requestPermission(
+        () => deviceOrientationConstructor.requestPermission!(),
+      ));
     };
 
     const armTiltPermissionGesture = () => {
       if (
-        tiltPermissionGestureArmed
+        disposed
+        || tiltPermissionGestureArmed
         || deviceOrientationPermission !== 'prompt'
       ) {
         return;
@@ -5381,6 +5463,7 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
     };
 
     const configureDeviceTilt = () => {
+      if (disposed) return;
       const shouldUseDeviceTilt = Boolean(deviceOrientationConstructor)
         && coarsePointer.matches
         && !parallaxPointer.matches
@@ -5398,11 +5481,20 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
         startDeviceTilt();
       } else if (deviceOrientationPermission === 'prompt') {
         armTiltPermissionGesture();
+      } else if (deviceOrientationPermission === 'requesting') {
+        const pendingRequest = deviceOrientationSession.getPendingRequest();
+        if (pendingRequest) {
+          observePermissionRequest(pendingRequest);
+        } else {
+          deviceOrientationSession.recoverOrphanedRequest();
+          deviceOrientationPermission = 'prompt';
+          armTiltPermissionGesture();
+        }
       }
     };
 
     const paint = (time: number) => {
-      if (!scene) return;
+      if (!scene || disposed || document.hidden) return;
       const elapsed = clamp(time - previousTime, 0, 64);
       previousTime = time;
       sceneTime += elapsed;
@@ -5446,6 +5538,7 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
     };
 
     const animate = (time: number) => {
+      if (disposed || reducedMotion || document.hidden) return;
       const frameInterval = coarsePointer.matches || window.innerWidth < 720 ? 1000 / 30 : 1000 / 45;
       const timeSinceLastPaint = time - lastPaintTime;
       if (timeSinceLastPaint >= frameInterval) {
@@ -5457,9 +5550,11 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
 
     const startAnimation = () => {
       window.cancelAnimationFrame(animationFrame);
+      animationFrame = 0;
       previousTime = performance.now();
       lastPaintTime = 0;
-      if (reducedMotion || document.hidden) {
+      if (disposed || document.hidden) return;
+      if (reducedMotion) {
         paint(previousTime);
         return;
       }
@@ -5467,6 +5562,12 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
     };
 
     const resize = () => {
+      if (disposed) return;
+      if (document.hidden) {
+        resizePendingWhileHidden = true;
+        return;
+      }
+      resizePendingWhileHidden = false;
       const renderWidth = Math.max(1, Math.round(canvas.clientWidth));
       const renderHeight = Math.max(1, Math.round(canvas.clientHeight));
       const width = Math.max(1, Math.round(background.clientWidth));
@@ -5507,6 +5608,11 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
     };
 
     const scheduleResize = () => {
+      if (disposed) return;
+      if (document.hidden) {
+        resizePendingWhileHidden = true;
+        return;
+      }
       window.cancelAnimationFrame(resizeFrame);
       resizeFrame = window.requestAnimationFrame(resize);
     };
@@ -5517,7 +5623,13 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (reducedMotion || !parallaxPointer.matches || event.pointerType === 'touch') return;
+      if (
+        disposed
+        || reducedMotion
+        || document.hidden
+        || !parallaxPointer.matches
+        || event.pointerType === 'touch'
+      ) return;
       const viewportWidth = Math.max(window.innerWidth, 1);
       const viewportHeight = Math.max(window.innerHeight, 1);
       targetParallaxX = clamp(event.clientX / viewportWidth * 2 - 1, -1, 1);
@@ -5560,12 +5672,26 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
     };
 
     const handleVisibility = () => {
+      if (document.hidden) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+        currentParallaxX = 0;
+        currentParallaxY = 0;
+        resetParallax();
+        disarmTiltPermissionGesture();
+        stopDeviceTilt();
+        return;
+      }
+      previousTime = performance.now();
+      lastPaintTime = 0;
+      const appliedPendingResize = resizePendingWhileHidden;
+      if (appliedPendingResize) resize();
       configureDeviceTilt();
-      startAnimation();
+      if (!reducedMotion || !appliedPendingResize) startAnimation();
     };
 
     redrawStaticSceneRef.current = () => {
-      if (!reducedMotion) return;
+      if (!reducedMotion || document.hidden || disposed) return;
       currentColor[0] = targetColorRef.current[0];
       currentColor[1] = targetColorRef.current[1];
       currentColor[2] = targetColorRef.current[2];
@@ -5585,9 +5711,25 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
     document.addEventListener('visibilitychange', handleVisibility);
     configureDeviceTilt();
     resize();
-    startAnimation();
+    if (!reducedMotion) startAnimation();
 
     return () => {
+      session.writeSnapshot({
+        version: RENDERER_SNAPSHOT_VERSION,
+        capturedAtMs: Date.now(),
+        sceneTimeMs: Math.max(0, sceneTime),
+        color: {
+          current: cloneRendererRgb(currentColor),
+          target: cloneRendererRgb(targetColorRef.current),
+        },
+        camera: {
+          currentX: clamp(currentParallaxX, -1, 1),
+          currentY: clamp(currentParallaxY, -1, 1),
+          targetX: clamp(targetParallaxX, -1, 1),
+          targetY: clamp(targetParallaxY, -1, 1),
+        },
+      });
+      disposed = true;
       window.cancelAnimationFrame(animationFrame);
       window.cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
@@ -5604,7 +5746,7 @@ export default function RenderDarkMode({ activeColor }: RenderDarkModeProps) {
       stopDeviceTilt();
       redrawStaticSceneRef.current = null;
     };
-  }, []);
+  }, [deviceOrientationSession, session]);
 
   return (
     <div className="ambient-background" aria-hidden="true">
