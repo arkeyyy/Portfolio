@@ -1,7 +1,6 @@
 import { ArrowUp } from 'lucide-react';
 
 export default function Footer() {
-  const currentYear = new Date().getFullYear();
 
   return (
     <footer className="site-footer">
@@ -13,8 +12,6 @@ export default function Footer() {
             <p>Computer Science Student &amp; Software Builder</p>
           </div>
         </div>
-
-        <p className="footer-copyright">© {currentYear} · Designed and built with care.</p>
 
         <a className="back-to-top" href="#about">
           Back to top
