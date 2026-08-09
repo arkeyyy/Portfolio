@@ -138,6 +138,7 @@ html.background-view-active body {
   --edge-glow-depth-rotate-x: 0deg;
   --edge-glow-depth-rotate-y: 0deg;
   --edge-glow-top-left-depth-scale: 1;
+  --edge-glow-mid-left-depth-scale: 1;
   --edge-glow-top-right-depth-scale: 1;
   --edge-glow-bottom-right-depth-scale: 1;
 
@@ -196,6 +197,10 @@ html.background-view-active body {
   transform: scale(var(--edge-glow-top-left-depth-scale));
 }
 
+.ambient-edge-glow-depth-mid-left {
+  transform: scale(var(--edge-glow-mid-left-depth-scale));
+}
+
 .ambient-edge-glow-depth-top-right {
   transform: scale(var(--edge-glow-top-right-depth-scale));
 }
@@ -223,6 +228,22 @@ html.background-view-active body {
   height: min(66vh, 760px);
   background: radial-gradient(ellipse, rgba(76, 142, 255, 0.32), transparent 72%);
   animation: edge-glow-top-left 20s ease-in-out infinite;
+}
+
+.ambient-edge-glow-mid-left {
+  --glow-rest-opacity: 0.1;
+  --glow-peak-opacity: 0.24;
+
+  top: 18%;
+  left: -22%;
+  width: min(58vw, 760px);
+  height: min(68vh, 760px);
+  background: radial-gradient(
+    ellipse,
+    color-mix(in srgb, var(--active-color) 18%, rgba(139, 92, 246, 0.22)),
+    transparent 74%
+  );
+  animation: edge-glow-mid-left 26s ease-in-out infinite;
 }
 
 .ambient-edge-glow-top-right {
@@ -256,6 +277,17 @@ html.background-view-active body {
   background: radial-gradient(ellipse, rgba(30, 102, 255, 0.4), transparent 72%);
 }
 
+.dark .ambient-edge-glow-mid-left {
+  --glow-rest-opacity: 0.14;
+  --glow-peak-opacity: 0.32;
+
+  background: radial-gradient(
+    ellipse,
+    color-mix(in srgb, var(--active-color) 24%, rgba(126, 66, 255, 0.3)),
+    transparent 74%
+  );
+}
+
 .dark .ambient-edge-glow-top-right {
   background: radial-gradient(ellipse, rgba(120, 62, 255, 0.38), transparent 72%);
 }
@@ -278,6 +310,19 @@ html.background-view-active body {
   50% {
     opacity: var(--glow-peak-opacity);
     transform: translate3d(9%, 7%, 0) scale(1.08);
+  }
+}
+
+@keyframes edge-glow-mid-left {
+  0%,
+  100% {
+    opacity: var(--glow-rest-opacity);
+    transform: translate3d(-3%, 2%, 0) scale(0.96);
+  }
+
+  48% {
+    opacity: var(--glow-peak-opacity);
+    transform: translate3d(9%, -5%, 0) scale(1.07);
   }
 }
 
@@ -2066,6 +2111,11 @@ html.background-view-active body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .ambient-edge-glow {
+    animation: none;
+    opacity: var(--glow-rest-opacity);
+  }
+
   .button:hover,
   .project-card:hover,
   .project-card:focus-within,

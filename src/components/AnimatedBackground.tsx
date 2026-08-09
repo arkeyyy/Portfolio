@@ -203,6 +203,17 @@ type ConstellationRenderTheme = {
   starAlpha: number;
 };
 
+type NebulaGlowLobe = {
+  offsetX: number;
+  offsetY: number;
+  radiusScale: number;
+  scaleX: number;
+  scaleY: number;
+  accentMix: number;
+  alphaScale: number;
+  phase: number;
+};
+
 type VortexSprites = {
   alpha: HTMLCanvasElement;
   active: HTMLCanvasElement;
@@ -543,6 +554,12 @@ const EDGE_GLOW_DEPTH_SPECS: readonly EdgeGlowDepthSpec[] = [
     perspectiveStrength: 0.42,
   },
   {
+    variable: '--edge-glow-mid-left-depth-scale',
+    normalizedX: -0.94,
+    normalizedY: -0.04,
+    perspectiveStrength: 0.36,
+  },
+  {
     variable: '--edge-glow-top-right-depth-scale',
     normalizedX: 0.82,
     normalizedY: -0.74,
@@ -634,6 +651,28 @@ const CANCER_HAZE_PALETTE: ConstellationHazePalette = [
   [71, 68, 133],
   [99, 74, 153],
   [176, 76, 149],
+];
+const LEFT_NEBULA_GLOW_LOBES: readonly NebulaGlowLobe[] = [
+  {
+    offsetX: -0.32,
+    offsetY: -0.04,
+    radiusScale: 0.27,
+    scaleX: 1.42,
+    scaleY: 0.76,
+    accentMix: 0.58,
+    alphaScale: 0.78,
+    phase: 1.2,
+  },
+  {
+    offsetX: -0.56,
+    offsetY: 0.1,
+    radiusScale: 0.22,
+    scaleX: 1.58,
+    scaleY: 0.68,
+    accentMix: 0.76,
+    alphaScale: 0.56,
+    phase: 4.4,
+  },
 ];
 const VORTEX_STAR_WHITE: Rgb = [246, 249, 255];
 const CYCLONE_CLOUD_PURPLE: Rgb = [158, 86, 235];
@@ -3976,12 +4015,12 @@ function drawMainRingAurora(
   );
   const motionTime = reducedMotion ? 0 : time;
   const { orbit } = scene;
-  const auroraWidth = orbit.radiusX * (scene.compact ? 1.16 : 1.08);
+  const auroraWidth = orbit.radiusX * (scene.compact ? 1.36 : 1.38);
   const auroraHeight = Math.min(
     scene.height * (scene.compact ? 0.26 : 0.38),
     scene.compact ? 220 : 340,
   );
-  const localX = -orbit.radiusX * (scene.compact ? 0.32 : 0.12);
+  const localX = -orbit.radiusX * (scene.compact ? 0.48 : 0.46);
   const localY = -orbit.radiusY * 0.92 - auroraHeight * 0.54;
   const driftX = reducedMotion ? 0 : Math.sin(motionTime * 0.000044 + 0.8) * 10;
   const driftY = reducedMotion ? 0 : Math.cos(motionTime * 0.000036 + 1.7) * 5;
@@ -4174,6 +4213,44 @@ function drawCloudCore(
       cloudHeight,
     );
     context.restore();
+
+    for (const lobe of LEFT_NEBULA_GLOW_LOBES) {
+      const lobePulse = reducedMotion
+        ? 1
+        : 0.96 + Math.sin(motionTime * 0.000047 + lobe.phase) * 0.04;
+      const lobeX = cloudX
+        + cloudWidth * lobe.offsetX
+        + (reducedMotion ? 0 : Math.sin(motionTime * 0.000031 + lobe.phase) * 9);
+      const lobeY = cloudY
+        + cloudHeight * lobe.offsetY
+        + (reducedMotion ? 0 : Math.cos(motionTime * 0.000027 + lobe.phase) * 6);
+      const lobeRadius = Math.max(cloudWidth * lobe.radiusScale, 120) * lobePulse;
+      const lobeColor = mixRgb(activeColor, nebulaAccentColor, lobe.accentMix);
+      const lobeGlow = context.createRadialGradient(0, 0, 0, 0, 0, lobeRadius);
+      lobeGlow.addColorStop(
+        0,
+        rgba(
+          lobeColor,
+          renderTheme.clouds.glowCoreAlpha * lobe.alphaScale * surface.alphaScale,
+        ),
+      );
+      lobeGlow.addColorStop(
+        0.48,
+        rgba(
+          mixRgb(activeColor, lobeColor, 0.42),
+          renderTheme.clouds.glowMidAlpha * lobe.alphaScale * surface.alphaScale,
+        ),
+      );
+      lobeGlow.addColorStop(1, rgba(lobeColor, 0));
+
+      context.save();
+      context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+      context.translate(lobeX, lobeY);
+      context.scale(lobe.scaleX, lobe.scaleY);
+      context.fillStyle = lobeGlow;
+      context.fillRect(-lobeRadius, -lobeRadius, lobeRadius * 2, lobeRadius * 2);
+      context.restore();
+    }
 
     const glowRadius = Math.max(cloudWidth * 0.42, 160);
     const glow = context.createRadialGradient(cloudX, cloudY, 0, cloudX, cloudY, glowRadius);
@@ -5730,6 +5807,9 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
       <div className="ambient-edge-glows">
         <span className="ambient-edge-glow-depth ambient-edge-glow-depth-top-left">
           <span className="ambient-edge-glow ambient-edge-glow-top-left" />
+        </span>
+        <span className="ambient-edge-glow-depth ambient-edge-glow-depth-mid-left">
+          <span className="ambient-edge-glow ambient-edge-glow-mid-left" />
         </span>
         <span className="ambient-edge-glow-depth ambient-edge-glow-depth-top-right">
           <span className="ambient-edge-glow ambient-edge-glow-top-right" />
