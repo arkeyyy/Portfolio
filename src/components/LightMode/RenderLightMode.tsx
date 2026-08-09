@@ -22,6 +22,12 @@ type Rgb = [number, number, number];
 type CloudLayerKind = 'far' | 'middle' | 'foreground';
 type HazeLayerKind = 'far' | 'middle' | 'near';
 
+type AtmosphericDepthProfile = Readonly<{
+  translation: number;
+  perspective: number;
+  tilt: number;
+}>;
+
 type CloudSprites = {
   farA: HTMLCanvasElement;
   farB: HTMLCanvasElement;
@@ -42,9 +48,7 @@ type Cloud = {
   y: number;
   width: number;
   height: number;
-  depth: number;
-  perspectiveDepth: number;
-  perspectiveStrength: number;
+  depthProfile: AtmosphericDepthProfile;
   speed: number;
   direction: -1 | 1;
   phase: number;
@@ -58,9 +62,7 @@ type HazeLayer = {
   y: number;
   width: number;
   height: number;
-  depth: number;
-  perspectiveDepth: number;
-  perspectiveStrength: number;
+  depthProfile: AtmosphericDepthProfile;
   phase: number;
   driftX: number;
   driftY: number;
@@ -73,7 +75,7 @@ type AtmosphericParticle = {
   x: number;
   y: number;
   size: number;
-  depth: number;
+  depthProfile: AtmosphericDepthProfile;
   phase: number;
   drift: number;
   speed: number;
@@ -137,7 +139,6 @@ type CloudSpec = {
   y: number;
   width: number;
   aspect: number;
-  depth: number;
   speed: number;
   direction: -1 | 1;
   opacity: number;
@@ -151,31 +152,48 @@ const SKY_LAVENDER: Rgb = [178, 166, 226];
 const WARM_PARTICLE: Rgb = [255, 244, 220];
 const COOL_PARTICLE: Rgb = [225, 246, 255];
 const SECTION_COLOR_DURATION_MS = 1200;
-const PARALLAX_EASE_MS = 340;
+const PARALLAX_EASE_MS = 300;
 const DEVICE_TILT_DEAD_ZONE = 1.25;
 const DEVICE_TILT_RANGE_X = 18;
 const DEVICE_TILT_RANGE_Y = 22;
 const TAU = Math.PI * 2;
 const DEGREE = Math.PI / 180;
 
+// Each normalized response is independent: 0 stays anchored and 1 receives
+// the light camera's full translation, cursor-weighted scale, or plane tilt.
+const LIGHT_DEPTH_PROFILES = {
+  sun: { translation: 0.02, perspective: 0.02, tilt: 0.01 },
+  farHaze: { translation: 0.05, perspective: 0.04, tilt: 0.03 },
+  farCloud: { translation: 0.2, perspective: 0.16, tilt: 0.14 },
+  middleHaze: { translation: 0.32, perspective: 0.28, tilt: 0.24 },
+  middleCloud: { translation: 0.45, perspective: 0.4, tilt: 0.36 },
+  nearHaze: { translation: 0.6, perspective: 0.56, tilt: 0.5 },
+  foregroundMist: { translation: 0.78, perspective: 0.7, tilt: 0.64 },
+} as const satisfies Record<string, AtmosphericDepthProfile>;
+
+const PARTICLE_DEPTH_RANGE = {
+  translation: [0.36, 0.54],
+  perspective: [0.32, 0.48],
+} as const;
+
 const DESKTOP_CLOUD_SPECS: CloudSpec[] = [
-  { x: -0.04, y: 0.2, width: 0.3, aspect: 3, depth: 0.14, speed: 2.7, direction: 1, opacity: 0.11, layer: 'far', sprite: 'farA' },
-  { x: 0.31, y: 0.32, width: 0.24, aspect: 2.8, depth: 0.17, speed: 3.8, direction: -1, opacity: 0.09, layer: 'far', sprite: 'farB' },
-  { x: 0.67, y: 0.16, width: 0.28, aspect: 3.1, depth: 0.19, speed: 3.2, direction: 1, opacity: 0.12, layer: 'far', sprite: 'farA' },
-  { x: 0.97, y: 0.48, width: 0.26, aspect: 2.9, depth: 0.2, speed: 4.1, direction: -1, opacity: 0.1, layer: 'far', sprite: 'farB' },
-  { x: -0.1, y: 0.5, width: 0.43, aspect: 2.35, depth: 0.31, speed: 5.1, direction: 1, opacity: 0.16, layer: 'middle', sprite: 'middleA' },
-  { x: 0.49, y: 0.61, width: 0.36, aspect: 2.2, depth: 0.37, speed: 6.6, direction: -1, opacity: 0.18, layer: 'middle', sprite: 'middleB' },
-  { x: 0.94, y: 0.36, width: 0.4, aspect: 2.3, depth: 0.34, speed: 4.7, direction: -1, opacity: 0.16, layer: 'middle', sprite: 'middleA' },
-  { x: -0.14, y: 0.88, width: 0.72, aspect: 2.55, depth: 0.52, speed: 3.4, direction: 1, opacity: 0.14, layer: 'foreground', sprite: 'foreground' },
-  { x: 0.93, y: 0.84, width: 0.66, aspect: 2.5, depth: 0.56, speed: 2.9, direction: -1, opacity: 0.15, layer: 'foreground', sprite: 'foreground' },
+  { x: -0.04, y: 0.2, width: 0.3, aspect: 3, speed: 2.7, direction: 1, opacity: 0.11, layer: 'far', sprite: 'farA' },
+  { x: 0.31, y: 0.32, width: 0.24, aspect: 2.8, speed: 3.8, direction: -1, opacity: 0.09, layer: 'far', sprite: 'farB' },
+  { x: 0.67, y: 0.16, width: 0.28, aspect: 3.1, speed: 3.2, direction: 1, opacity: 0.12, layer: 'far', sprite: 'farA' },
+  { x: 0.97, y: 0.48, width: 0.26, aspect: 2.9, speed: 4.1, direction: -1, opacity: 0.1, layer: 'far', sprite: 'farB' },
+  { x: -0.1, y: 0.5, width: 0.43, aspect: 2.35, speed: 5.1, direction: 1, opacity: 0.16, layer: 'middle', sprite: 'middleA' },
+  { x: 0.49, y: 0.61, width: 0.36, aspect: 2.2, speed: 6.6, direction: -1, opacity: 0.18, layer: 'middle', sprite: 'middleB' },
+  { x: 0.94, y: 0.36, width: 0.4, aspect: 2.3, speed: 4.7, direction: -1, opacity: 0.16, layer: 'middle', sprite: 'middleA' },
+  { x: -0.14, y: 0.88, width: 0.72, aspect: 2.55, speed: 3.4, direction: 1, opacity: 0.14, layer: 'foreground', sprite: 'foreground' },
+  { x: 0.93, y: 0.84, width: 0.66, aspect: 2.5, speed: 2.9, direction: -1, opacity: 0.15, layer: 'foreground', sprite: 'foreground' },
 ];
 
 const COMPACT_CLOUD_SPECS: CloudSpec[] = [
-  { x: -0.08, y: 0.24, width: 0.55, aspect: 3, depth: 0.14, speed: 2.5, direction: 1, opacity: 0.1, layer: 'far', sprite: 'farA' },
-  { x: 0.78, y: 0.42, width: 0.48, aspect: 2.8, depth: 0.19, speed: 3.3, direction: -1, opacity: 0.115, layer: 'far', sprite: 'farB' },
-  { x: -0.12, y: 0.57, width: 0.78, aspect: 2.3, depth: 0.32, speed: 4.2, direction: 1, opacity: 0.155, layer: 'middle', sprite: 'middleA' },
-  { x: 0.79, y: 0.66, width: 0.72, aspect: 2.2, depth: 0.37, speed: 5.2, direction: -1, opacity: 0.17, layer: 'middle', sprite: 'middleB' },
-  { x: 0.84, y: 0.9, width: 1.24, aspect: 2.6, depth: 0.53, speed: 2.8, direction: -1, opacity: 0.14, layer: 'foreground', sprite: 'foreground' },
+  { x: -0.08, y: 0.24, width: 0.55, aspect: 3, speed: 2.5, direction: 1, opacity: 0.1, layer: 'far', sprite: 'farA' },
+  { x: 0.78, y: 0.42, width: 0.48, aspect: 2.8, speed: 3.3, direction: -1, opacity: 0.115, layer: 'far', sprite: 'farB' },
+  { x: -0.12, y: 0.57, width: 0.78, aspect: 2.3, speed: 4.2, direction: 1, opacity: 0.155, layer: 'middle', sprite: 'middleA' },
+  { x: 0.79, y: 0.66, width: 0.72, aspect: 2.2, speed: 5.2, direction: -1, opacity: 0.17, layer: 'middle', sprite: 'middleB' },
+  { x: 0.84, y: 0.9, width: 1.24, aspect: 2.6, speed: 2.8, direction: -1, opacity: 0.14, layer: 'foreground', sprite: 'foreground' },
 ];
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -473,19 +491,17 @@ function createClouds(
   const specs = compact ? COMPACT_CLOUD_SPECS : DESKTOP_CLOUD_SPECS;
   return specs.map((spec, index): Cloud => {
     const cloudWidth = getCloudWidth(width, compact, spec);
-    const perspectiveDepth = spec.layer === 'far'
-      ? 0.22
+    const depthProfile = spec.layer === 'far'
+      ? LIGHT_DEPTH_PROFILES.farCloud
       : spec.layer === 'middle'
-        ? 0.4
-        : 0.58;
+        ? LIGHT_DEPTH_PROFILES.middleCloud
+        : LIGHT_DEPTH_PROFILES.foregroundMist;
     return {
       x: width * spec.x,
       y: height * spec.y,
       width: cloudWidth,
       height: cloudWidth / spec.aspect,
-      depth: spec.depth,
-      perspectiveDepth,
-      perspectiveStrength: spec.layer === 'far' ? 0.28 : spec.layer === 'middle' ? 0.42 : 0.52,
+      depthProfile,
       speed: spec.speed,
       direction: spec.direction,
       phase: index * 1.73 + 0.41,
@@ -508,9 +524,7 @@ function createHazeLayers(
       y: height * 0.31,
       width: Math.max(width * 0.7, shortSide * 0.8),
       height: Math.max(height * 0.48, shortSide * 0.52),
-      depth: 0.08,
-      perspectiveDepth: 0.14,
-      perspectiveStrength: 0.18,
+      depthProfile: LIGHT_DEPTH_PROFILES.farHaze,
       phase: 0.7,
       driftX: width * 0.012,
       driftY: height * 0.01,
@@ -523,9 +537,7 @@ function createHazeLayers(
       y: height * 0.48,
       width: Math.max(width * 0.62, shortSide * 0.72),
       height: Math.max(height * 0.55, shortSide * 0.58),
-      depth: 0.24,
-      perspectiveDepth: 0.31,
-      perspectiveStrength: 0.32,
+      depthProfile: LIGHT_DEPTH_PROFILES.middleHaze,
       phase: 2.3,
       driftX: width * 0.018,
       driftY: height * 0.014,
@@ -538,9 +550,7 @@ function createHazeLayers(
       y: height * 0.86,
       width: Math.max(width * 0.86, shortSide),
       height: Math.max(height * 0.44, shortSide * 0.5),
-      depth: 0.4,
-      perspectiveDepth: 0.47,
-      perspectiveStrength: 0.42,
+      depthProfile: LIGHT_DEPTH_PROFILES.nearHaze,
       phase: 4.8,
       driftX: width * 0.021,
       driftY: height * 0.017,
@@ -554,16 +564,30 @@ function createHazeLayers(
 function createParticles(width: number, height: number, compact: boolean) {
   const count = compact ? 26 : 48;
   const random = createSeededRandom(compact ? 8111 : 9011);
-  return Array.from({ length: count }, (_, index): AtmosphericParticle => ({
-    x: random() * width,
-    y: random() * height,
-    size: (compact ? 0.45 : 0.55) + random() * (compact ? 1.05 : 1.35),
-    depth: 0.15 + random() * 0.31,
-    phase: random() * TAU + index * 0.19,
-    drift: 2 + random() * 7,
-    speed: 0.55 + random() * 2.1,
-    colorIndex: Math.floor(random() * 3),
-  }));
+  return Array.from({ length: count }, (_, index): AtmosphericParticle => {
+    const x = random() * width;
+    const y = random() * height;
+    const size = (compact ? 0.45 : 0.55) + random() * (compact ? 1.05 : 1.35);
+    const depthMix = random();
+    return {
+      x,
+      y,
+      size,
+      depthProfile: {
+        translation: PARTICLE_DEPTH_RANGE.translation[0]
+          + depthMix
+          * (PARTICLE_DEPTH_RANGE.translation[1] - PARTICLE_DEPTH_RANGE.translation[0]),
+        perspective: PARTICLE_DEPTH_RANGE.perspective[0]
+          + depthMix
+          * (PARTICLE_DEPTH_RANGE.perspective[1] - PARTICLE_DEPTH_RANGE.perspective[0]),
+        tilt: 0,
+      },
+      phase: random() * TAU + index * 0.19,
+      drift: 2 + random() * 7,
+      speed: 0.55 + random() * 2.1,
+      colorIndex: Math.floor(random() * 3),
+    };
+  });
 }
 
 function createScene(
@@ -628,11 +652,11 @@ function createParallaxFrame(
   return {
     positionX: clampedX,
     positionY: clampedY,
-    maximumOffsetX: clamp(scene.width * 0.02, 12, 28) * scene.motionScale,
-    maximumOffsetY: clamp(scene.height * 0.015, 8, 18) * scene.motionScale,
-    maximumPitch: 5 * DEGREE,
-    maximumYaw: 7 * DEGREE,
-    maximumPerspectiveScale: 0.035,
+    maximumOffsetX: clamp(scene.width * 0.025, 15, 34) * scene.motionScale,
+    maximumOffsetY: clamp(scene.height * 0.019, 10, 22) * scene.motionScale,
+    maximumPitch: 7 * DEGREE * scene.motionScale,
+    maximumYaw: 10 * DEGREE * scene.motionScale,
+    maximumPerspectiveScale: 0.05 * scene.motionScale,
     centerX: scene.width * 0.5,
     centerY: scene.height * 0.5,
     inverseHalfWidth: 2 / Math.max(scene.width, 1),
@@ -653,9 +677,7 @@ function projectAtDepth(
   parallax: ParallaxFrame,
   x: number,
   y: number,
-  translationDepth: number,
-  perspectiveDepth: number,
-  perspectiveStrength: number,
+  depthProfile: AtmosphericDepthProfile,
   output: DepthProjection,
 ) {
   const normalizedX = clamp((x - parallax.centerX) * parallax.inverseHalfWidth, -1.2, 1.2);
@@ -666,14 +688,14 @@ function projectAtDepth(
     -1,
     1,
   );
-  const response = cursorSide * clamp(perspectiveDepth, 0, 1) * perspectiveStrength;
+  const response = cursorSide * clamp(depthProfile.perspective, 0, 1);
   const scale = clamp(1 - response * parallax.maximumPerspectiveScale, 0.94, 1.06);
   output.x = parallax.centerX
     + (x - parallax.centerX) * scale
-    + getParallaxOffsetX(parallax, translationDepth);
+    + getParallaxOffsetX(parallax, depthProfile.translation);
   output.y = parallax.centerY
     + (y - parallax.centerY) * scale
-    + getParallaxOffsetY(parallax, translationDepth);
+    + getParallaxOffsetY(parallax, depthProfile.translation);
   output.scale = scale;
   output.alphaScale = clamp(1 - response * 0.09, 0.94, 1.06);
 }
@@ -686,9 +708,7 @@ function drawDepthImage(
   y: number,
   width: number,
   height: number,
-  depth: number,
-  perspectiveDepth: number,
-  perspectiveStrength: number,
+  depthProfile: AtmosphericDepthProfile,
   opacity: number,
   parallax: ParallaxFrame,
   rotation = 0,
@@ -697,17 +717,15 @@ function drawDepthImage(
     parallax,
     x,
     y,
-    depth,
-    perspectiveDepth,
-    perspectiveStrength,
+    depthProfile,
     scene.projection,
   );
-  const response = clamp(depth * perspectiveStrength, 0, 1);
+  const response = clamp(depthProfile.tilt, 0, 1);
   const pitch = -parallax.positionY * parallax.maximumPitch * response;
   const yaw = parallax.positionX * parallax.maximumYaw * response;
   context.save();
   context.translate(scene.projection.x, scene.projection.y);
-  context.transform(1, Math.sin(pitch) * 0.08, Math.sin(yaw) * 0.06, 1, 0, 0);
+  context.transform(1, Math.sin(pitch) * 0.11, Math.sin(yaw) * 0.085, 1, 0, 0);
   context.rotate(rotation + (yaw - pitch) * 0.025);
   context.scale(scene.projection.scale, scene.projection.scale);
   context.globalAlpha = opacity * scene.projection.alphaScale;
@@ -732,8 +750,10 @@ function drawAtmosphericWash(
   parallax: ParallaxFrame,
 ) {
   const shortSide = Math.min(scene.width, scene.height);
-  const accentX = scene.width * 0.08 + getParallaxOffsetX(parallax, 0.16);
-  const accentY = scene.height * 0.69 + getParallaxOffsetY(parallax, 0.16);
+  const accentX = scene.width * 0.08
+    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.middleHaze.translation);
+  const accentY = scene.height * 0.69
+    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.middleHaze.translation);
   const accent = context.createRadialGradient(accentX, accentY, 0, accentX, accentY, shortSide * 0.86);
   accent.addColorStop(0, rgba(activeColor, 0.085));
   accent.addColorStop(0.48, rgba(activeColor, 0.035));
@@ -741,8 +761,10 @@ function drawAtmosphericWash(
   context.fillStyle = accent;
   context.fillRect(0, 0, scene.width, scene.height);
 
-  const coolX = scene.width * 0.72 + getParallaxOffsetX(parallax, 0.08);
-  const coolY = scene.height * 0.44 + getParallaxOffsetY(parallax, 0.08);
+  const coolX = scene.width * 0.72
+    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  const coolY = scene.height * 0.44
+    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
   const cool = context.createRadialGradient(coolX, coolY, 0, coolX, coolY, shortSide * 0.72);
   cool.addColorStop(0, rgba(SKY_LAVENDER, 0.055));
   cool.addColorStop(1, rgba(SKY_LAVENDER, 0));
@@ -757,7 +779,13 @@ function drawSun(
   activeColor: Rgb,
   parallax: ParallaxFrame,
 ) {
-  projectAtDepth(parallax, scene.sun.x, scene.sun.y, 0.025, 0.06, 0.08, scene.projection);
+  projectAtDepth(
+    parallax,
+    scene.sun.x,
+    scene.sun.y,
+    LIGHT_DEPTH_PROFILES.sun,
+    scene.projection,
+  );
   const accent = context.createRadialGradient(
     scene.projection.x,
     scene.projection.y,
@@ -781,9 +809,7 @@ function drawSun(
     scene.sun.y,
     diameter,
     diameter,
-    0.025,
-    0.06,
-    0.08,
+    LIGHT_DEPTH_PROFILES.sun,
     0.92,
     parallax,
   );
@@ -809,9 +835,7 @@ function drawHaze(
       y,
       haze.width,
       haze.height,
-      haze.depth,
-      haze.perspectiveDepth,
-      haze.perspectiveStrength,
+      haze.depthProfile,
       haze.opacity * pulse,
       parallax,
     );
@@ -846,9 +870,7 @@ function drawClouds(
       y,
       cloud.width,
       cloud.height,
-      cloud.depth,
-      cloud.perspectiveDepth,
-      cloud.perspectiveStrength,
+      cloud.depthProfile,
       cloud.opacity,
       parallax,
       rotation,
@@ -876,9 +898,7 @@ function drawParticles(
       parallax,
       x,
       y,
-      particle.depth,
-      particle.depth,
-      0.36,
+      particle.depthProfile,
       scene.projection,
     );
     const shimmer = 0.68 + Math.sin(time * 0.0011 + particle.phase) * 0.2;
@@ -906,8 +926,9 @@ function drawEdgeGlow(
   parallax: ParallaxFrame,
 ) {
   const shortSide = Math.min(scene.width, scene.height);
-  const x = getParallaxOffsetX(parallax, 0.38);
-  const y = scene.height + getParallaxOffsetY(parallax, 0.38);
+  const x = getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.nearHaze.translation);
+  const y = scene.height
+    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.nearHaze.translation);
   const lower = context.createRadialGradient(x, y, 0, x, y, shortSide * 0.9);
   lower.addColorStop(0, rgba(activeColor, 0.06));
   lower.addColorStop(0.62, rgba(activeColor, 0.02));
@@ -915,7 +936,17 @@ function drawEdgeGlow(
   context.fillStyle = lower;
   context.fillRect(0, 0, scene.width, scene.height);
 
-  const upper = context.createRadialGradient(scene.width, 0, 0, scene.width, 0, shortSide * 0.72);
+  const upperX = scene.width
+    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  const upperY = getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  const upper = context.createRadialGradient(
+    upperX,
+    upperY,
+    0,
+    upperX,
+    upperY,
+    shortSide * 0.72,
+  );
   upper.addColorStop(0, rgba(SKY_CYAN, 0.045));
   upper.addColorStop(1, rgba(SKY_CYAN, 0));
   context.fillStyle = upper;
