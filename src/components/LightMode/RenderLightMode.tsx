@@ -428,14 +428,14 @@ function createSunSprite() {
 
   const outer = context.createRadialGradient(center, center, 0, center, center, center);
   outer.addColorStop(0, 'rgba(255,253,244,0.82)');
-  outer.addColorStop(0.045, 'rgba(255,249,229,0.56)');
-  outer.addColorStop(0.16, 'rgba(255,236,198,0.24)');
+  outer.addColorStop(0.05, 'rgba(255,249,229,0.56)');
+  outer.addColorStop(0.17, 'rgba(255,236,198,0.24)');
   outer.addColorStop(0.48, 'rgba(255,225,181,0.09)');
   outer.addColorStop(1, 'rgba(255,225,181,0)');
   context.fillStyle = outer;
   context.fillRect(0, 0, size, size);
 
-  const core = context.createRadialGradient(center, center, 0, center, center, size * 0.045);
+  const core = context.createRadialGradient(center, center, 0, center, center, size * 0.05);
   core.addColorStop(0, 'rgba(255,255,252,0.98)');
   core.addColorStop(0.36, 'rgba(255,252,240,0.82)');
   core.addColorStop(1, 'rgba(255,241,211,0)');
@@ -604,10 +604,10 @@ function createScene(
     compact,
     motionScale: compact || coarsePointer ? 0.68 : 1,
     sun: {
-      x: width * (compact ? 0.91 : 0.88),
-      y: compact ? Math.max(height * 0.19, 108) : height * 0.14,
-      radius: shortSide * 0.016,
-      glowRadius: shortSide * (compact ? 0.323 : 0.38),
+      x: width * 0.91,
+      y: compact ? Math.max(height * 0.2, 120) : height * 0.17,
+      radius: shortSide * 0.018,
+      glowRadius: shortSide * (compact ? 0.36 : 0.43),
     },
     clouds: createClouds(width, height, compact, sprites.clouds),
     haze: createHazeLayers(width, height, sprites),
