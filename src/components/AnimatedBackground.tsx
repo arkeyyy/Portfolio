@@ -369,6 +369,14 @@ type CosmicRenderTheme = {
     standardAlpha: number;
     iceOuterAlpha: number;
   };
+  planetNightSide: {
+    color: Rgb;
+    alpha: number;
+    lightOffsetX: number;
+    lightOffsetY: number;
+    falloff: number;
+    rimAlpha: number;
+  };
   planetGradient: readonly [number, number, number, number];
   rogueTrailAlpha: number;
 };
@@ -809,6 +817,14 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
       standardAlpha: 0.44,
       iceOuterAlpha: 0.24,
     },
+    planetNightSide: {
+      color: [3, 6, 22],
+      alpha: 0,
+      lightOffsetX: -0.84,
+      lightOffsetY: -0.68,
+      falloff: 1.5,
+      rimAlpha: 0,
+    },
     planetGradient: [0.84, 0.98, 0.99, 0.99],
     rogueTrailAlpha: 0.28,
   },
@@ -828,8 +844,8 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     },
     aurora: { activeAlpha: 0.38, purpleAlpha: 0.16 },
     quasar: { spriteAlpha: 0.5, lensAlpha: 0.28, particleAlpha: 0.46 },
-    libra: { cloudAlpha: 0.38, lineAlpha: 0.44, starAlpha: 0.82 },
-    cancer: { cloudAlpha: 0.27, lineAlpha: 0.33, starAlpha: 0.7 },
+    libra: { cloudAlpha: 0.1, lineAlpha: 0.12, starAlpha: 0.28 },
+    cancer: { cloudAlpha: 0.07, lineAlpha: 0.09, starAlpha: 0.22 },
     distantCyclone: {
       hazeAlpha: 0.21,
       cyanAlpha: 0.4,
@@ -853,7 +869,7 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
       glowMidAlpha: 0.011,
     },
     ringParticleAlpha: 0.56,
-    planetRing: { foregroundAlpha: 0.42, backgroundAlpha: 0.25 },
+    planetRing: { foregroundAlpha: 0.24, backgroundAlpha: 0.14 },
     planetSurface: {
       featureAlpha: 0.36,
       violetStormAlpha: 0.46,
@@ -866,13 +882,21 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
       iceFissureAlpha: 0.6,
     },
     planetAtmosphere: {
-      rockyAlpha: 0.16,
-      iceAlpha: 0.52,
-      standardAlpha: 0.32,
-      iceOuterAlpha: 0.22,
+      rockyAlpha: 0.1,
+      iceAlpha: 0.3,
+      standardAlpha: 0.18,
+      iceOuterAlpha: 0.12,
     },
-    planetGradient: [0.78, 0.88, 0.92, 0.78],
-    rogueTrailAlpha: 0.2,
+    planetNightSide: {
+      color: [3, 6, 22],
+      alpha: 0.82,
+      lightOffsetX: -0.84,
+      lightOffsetY: -0.68,
+      falloff: 1.5,
+      rimAlpha: 0.34,
+    },
+    planetGradient: [0.9, 0.94, 0.96, 0.96],
+    rogueTrailAlpha: 0.1,
   },
 };
 const BRAND_STAR_COLORS: readonly Rgb[] = [
@@ -3350,6 +3374,7 @@ function drawConstellationCloud(
   time: number,
   renderTheme: CosmicRenderTheme,
   constellationTheme: ConstellationRenderTheme,
+  opacityScale: number,
   reducedMotion: boolean,
   parallax: ParallaxFrame,
   layer: DepthFieldLayer,
@@ -3373,7 +3398,9 @@ function drawConstellationCloud(
     context.translate(centerX, centerY);
     context.rotate(rotation);
     context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
-    context.globalAlpha = constellationTheme.cloudAlpha * surface.alphaScale;
+    context.globalAlpha = constellationTheme.cloudAlpha
+      * opacityScale
+      * surface.alphaScale;
     context.drawImage(
       constellation.sprites.cloud,
       -cloudWidth * 0.5,
@@ -3392,6 +3419,7 @@ function drawConstellation(
   time: number,
   renderTheme: CosmicRenderTheme,
   constellationTheme: ConstellationRenderTheme,
+  opacityScale: number,
   reducedMotion: boolean,
   parallax: ParallaxFrame,
   layer: DepthFieldLayer,
@@ -3426,7 +3454,10 @@ function drawConstellation(
     context.translate(centerX, centerY);
     context.rotate(rotation);
     context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
-    context.globalAlpha = constellationTheme.lineAlpha * linePulse * surface.alphaScale;
+    context.globalAlpha = constellationTheme.lineAlpha
+      * opacityScale
+      * linePulse
+      * surface.alphaScale;
     context.drawImage(
       constellation.sprites.lines,
       -constellation.width * 0.5,
@@ -3449,7 +3480,10 @@ function drawConstellation(
       const sprite = node.colorIndex === 0
         ? constellation.sprites.primaryStar
         : constellation.sprites.secondaryStar;
-      context.globalAlpha = constellationTheme.starAlpha * twinkle * surface.alphaScale;
+      context.globalAlpha = constellationTheme.starAlpha
+        * opacityScale
+        * twinkle
+        * surface.alphaScale;
       context.drawImage(
         sprite,
         localX - starSize * 0.5,
@@ -4703,6 +4737,68 @@ function drawPlanetSurface(
   context.restore();
 }
 
+function drawPlanetNightSide(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  rimColor: Rgb,
+  renderTheme: CosmicRenderTheme,
+) {
+  const nightSide = renderTheme.planetNightSide;
+  if (nightSide.alpha <= 0 && nightSide.rimAlpha <= 0) return;
+
+  if (nightSide.alpha > 0) {
+    const lightX = x + radius * nightSide.lightOffsetX;
+    const lightY = y + radius * nightSide.lightOffsetY;
+    const shadow = context.createRadialGradient(
+      lightX,
+      lightY,
+      0,
+      lightX,
+      lightY,
+      radius * nightSide.falloff,
+    );
+    shadow.addColorStop(0, rgba(nightSide.color, nightSide.alpha * 0.04));
+    shadow.addColorStop(0.2, rgba(nightSide.color, nightSide.alpha * 0.08));
+    shadow.addColorStop(0.42, rgba(nightSide.color, nightSide.alpha * 0.3));
+    shadow.addColorStop(0.65, rgba(nightSide.color, nightSide.alpha * 0.76));
+    shadow.addColorStop(0.82, rgba(nightSide.color, nightSide.alpha * 0.96));
+    shadow.addColorStop(1, rgba(nightSide.color, nightSide.alpha));
+
+    context.save();
+    context.beginPath();
+    context.arc(x, y, radius, 0, TAU);
+    context.clip();
+    context.fillStyle = shadow;
+    context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    context.restore();
+  }
+
+  if (nightSide.rimAlpha > 0) {
+    const lightAngle = Math.atan2(
+      nightSide.lightOffsetY,
+      nightSide.lightOffsetX,
+    );
+    const backlightColor = mixRgb(rimColor, [245, 248, 255], 0.18);
+    context.save();
+    context.globalCompositeOperation = 'screen';
+    context.strokeStyle = rgba(backlightColor, nightSide.rimAlpha);
+    context.lineWidth = Math.max(0.9, radius * 0.055);
+    context.lineCap = 'round';
+    context.beginPath();
+    context.arc(
+      x,
+      y,
+      radius + context.lineWidth * 0.22,
+      lightAngle - 0.96,
+      lightAngle + 0.96,
+    );
+    context.stroke();
+    context.restore();
+  }
+}
+
 function drawPlanet(
   context: CanvasRenderingContext2D,
   x: number,
@@ -4763,6 +4859,8 @@ function drawPlanet(
     phase,
     viewPose,
   );
+
+  drawPlanetNightSide(context, x, y, radius, rimColor, renderTheme);
 
   context.strokeStyle = rgba(rimColor, atmosphereAlpha);
   context.lineWidth = Math.max(0.75, radius * 0.025);
@@ -4972,6 +5070,7 @@ function drawScene(
   parallax: ParallaxFrame,
 ) {
   const renderTheme = isDark ? COSMIC_RENDER_THEMES.dark : COSMIC_RENDER_THEMES.light;
+  const constellationOpacityScale = !isDark && scene.compact ? 0.82 : 1;
   const planetStates = getPlanetRenderStates(scene, time, reducedMotion, parallax);
   const mainRingSurface = getDepthFieldSurface(
     parallax,
@@ -4999,6 +5098,7 @@ function drawScene(
     time,
     renderTheme,
     renderTheme.cancer,
+    constellationOpacityScale,
     reducedMotion,
     parallax,
     DEPTH_FIELD_LAYERS.cancerHaze,
@@ -5009,6 +5109,7 @@ function drawScene(
     time,
     renderTheme,
     renderTheme.libra,
+    constellationOpacityScale,
     reducedMotion,
     parallax,
     DEPTH_FIELD_LAYERS.libraHaze,
@@ -5020,6 +5121,7 @@ function drawScene(
     time,
     renderTheme,
     renderTheme.cancer,
+    constellationOpacityScale,
     reducedMotion,
     parallax,
     DEPTH_FIELD_LAYERS.cancer,
@@ -5031,6 +5133,7 @@ function drawScene(
     time,
     renderTheme,
     renderTheme.libra,
+    constellationOpacityScale,
     reducedMotion,
     parallax,
     DEPTH_FIELD_LAYERS.libra,
