@@ -794,6 +794,14 @@ const PLANET_PALETTES: Record<PlanetKind, { highlight: Rgb; mid: Rgb; shadow: Rg
     feature: [255, 255, 255],
   },
 };
+const PLANET_SECTION_TINT = {
+  highlight: 0.22,
+  mid: 0.3,
+  shadow: 0.18,
+  feature: 0.26,
+  rim: 0.5,
+  trail: 0.42,
+} as const;
 
 function seededRandom(seed: number) {
   const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
@@ -4083,11 +4091,11 @@ function drawPlanet(
   viewPose: ParallaxPose,
 ) {
   const palette = PLANET_PALETTES[kind];
-  const highlightColor = mixRgb(palette.highlight, activeColor, 0.06);
-  const midColor = mixRgb(palette.mid, activeColor, 0.05);
-  const shadowColor = mixRgb(palette.shadow, activeColor, 0.025);
-  const featureColor = mixRgb(palette.feature, activeColor, 0.08);
-  const rimColor = mixRgb(featureColor, activeColor, 0.28);
+  const highlightColor = mixRgb(palette.highlight, activeColor, PLANET_SECTION_TINT.highlight);
+  const midColor = mixRgb(palette.mid, activeColor, PLANET_SECTION_TINT.mid);
+  const shadowColor = mixRgb(palette.shadow, activeColor, PLANET_SECTION_TINT.shadow);
+  const featureColor = mixRgb(palette.feature, activeColor, PLANET_SECTION_TINT.feature);
+  const rimColor = mixRgb(palette.feature, activeColor, PLANET_SECTION_TINT.rim);
   const atmosphereAlpha = kind === 'rocky'
     ? renderTheme.planetAtmosphere.rockyAlpha
     : kind === 'ice'
@@ -4296,7 +4304,11 @@ function drawPlanets(
     if (planet.motion === 'rogue') {
       const direction = Math.sign(planet.velocityX) || 1;
       const trailEndX = x - direction * radius * 3.2;
-      const trailColor = mixRgb(PLANET_PALETTES[planet.kind].feature, activeColor, 0.16);
+      const trailColor = mixRgb(
+        PLANET_PALETTES[planet.kind].feature,
+        activeColor,
+        PLANET_SECTION_TINT.trail,
+      );
       const trail = context.createLinearGradient(x, y, trailEndX, y);
       trail.addColorStop(0, rgba(trailColor, renderTheme.rogueTrailAlpha));
       trail.addColorStop(1, rgba(trailColor, 0));
