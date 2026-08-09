@@ -21,6 +21,10 @@ type GoldStar = {
   depth: number;
   phase: number;
   drift: number;
+  fadeDuration: number;
+  fadeRest: number;
+  fadeOffset: number;
+  fadeFloor: number;
 };
 
 type RingParticle = {
@@ -1202,6 +1206,22 @@ function getAnimatedFieldStarColor(seed: number, offset: number, time: number) {
   const startColor = goldToWhite ? FIELD_STAR_GOLD : FIELD_STAR_WHITE;
   const endColor = goldToWhite ? FIELD_STAR_WHITE : FIELD_STAR_GOLD;
   return mixRgb(startColor, endColor, progress);
+}
+
+function getGoldStarFade(star: GoldStar, time: number) {
+  const cycleDuration = star.fadeDuration * 2 + star.fadeRest;
+  const cycleTime = (time + star.fadeOffset) % cycleDuration;
+
+  if (cycleTime < star.fadeDuration) {
+    return 1 - (1 - star.fadeFloor) * smoothstep(cycleTime / star.fadeDuration);
+  }
+
+  if (cycleTime < star.fadeDuration * 2) {
+    const progress = (cycleTime - star.fadeDuration) / star.fadeDuration;
+    return star.fadeFloor + (1 - star.fadeFloor) * smoothstep(progress);
+  }
+
+  return 1;
 }
 
 function createCloudAlphaSprite() {
@@ -2418,6 +2438,9 @@ function createGoldStars(width: number, height: number, compact: boolean) {
       : layerSelector < 0.84
         ? 0.5 + seededRandom(seed + 2.5) * 0.2
         : 0.74 + seededRandom(seed + 2.5) * 0.24;
+    const fadeDuration = 900 + seededRandom(seed + 11.3) * 900;
+    const fadeRest = 1100 + seededRandom(seed + 13.7) * 4600;
+    const fadeCycle = fadeDuration * 2 + fadeRest;
 
     return {
       x: seededRandom(seed + 3.7),
@@ -2426,6 +2449,10 @@ function createGoldStars(width: number, height: number, compact: boolean) {
       depth,
       phase: seededRandom(seed + 9.7) * TAU,
       drift: 2.5 + depth * 8,
+      fadeDuration,
+      fadeRest,
+      fadeOffset: seededRandom(seed + 15.1) * fadeCycle,
+      fadeFloor: 0.06 + seededRandom(seed + 17.9) * 0.14,
     };
   });
 }
@@ -2989,9 +3016,11 @@ function drawGoldStars(
     const sparkle = reducedMotion
       ? 0.82
       : 0.72 + Math.sin(time * 0.00155 + star.phase) * 0.2;
+    const fade = getGoldStarFade(star, motionTime);
     const alpha = renderTheme.goldStarAlpha
       * (0.52 + star.depth * 0.48)
       * sparkle
+      * fade
       * projection.alphaScale;
     const size = star.size * (0.88 + sparkle * 0.16) * projection.scale;
     const color = mixRgb(deepGold, warmGold, star.depth);
