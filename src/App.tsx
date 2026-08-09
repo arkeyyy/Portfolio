@@ -17,7 +17,7 @@ import type { SectionId } from './sectionTheme';
 const THEME_STORAGE_KEY = 'aldrin-portfolio-theme';
 const DARK_THEME_COLOR = '#0b0c0f';
 const LIGHT_THEME_COLOR = '#e9edf7';
-const LIGHT_MODE_AVAILABLE: boolean = false;
+const LIGHT_MODE_AVAILABLE: boolean = true;
 
 function getInitialTheme() {
   if (!LIGHT_MODE_AVAILABLE) return true;

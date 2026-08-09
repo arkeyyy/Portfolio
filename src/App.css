@@ -168,6 +168,31 @@ html.background-view-active body {
   animation: page-bg-fade 50s ease-in-out infinite;
 }
 
+.ambient-background.light-atmosphere {
+  --cosmic-canvas-overscan: 0px;
+
+  background: linear-gradient(
+    180deg,
+    #d8ecfc 0%,
+    #eaf5fd 44%,
+    #f5f9fb 76%,
+    #fff5e8 100%
+  );
+  filter: none;
+  animation: none;
+}
+
+.light-atmosphere-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  contain: strict;
+  pointer-events: none;
+}
+
 .ambient-edge-glows {
   position: absolute;
   inset: 0;

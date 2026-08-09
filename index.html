@@ -15,6 +15,28 @@
       content="Developer portfolio - selected software projects, skills, certifications, education, and contact information."
     />
     <meta name="theme-color" content="#0b0c0f" />
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const storageKey = 'aldrin-portfolio-theme';
+        let isDarkMode;
+
+        try {
+          const savedTheme = window.localStorage.getItem(storageKey);
+          isDarkMode = savedTheme === 'dark'
+            || (savedTheme !== 'light'
+              && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } catch {
+          isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+
+        root.classList.toggle('dark', isDarkMode);
+        root.style.colorScheme = isDarkMode ? 'dark' : 'light';
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute('content', isDarkMode ? '#0b0c0f' : '#e9edf7');
+      })();
+    </script>
     <title>Suse Developer Portfolio</title>
   </head>
   <body>
