@@ -21,6 +21,7 @@ import type {
   RendererSession,
 } from './components/backgroundRendererSession';
 import { requestDeviceOrientationPermission } from './components/backgroundRendererSession';
+import { prewarmBackgroundRenderer } from './components/backgroundRendererPrewarm';
 
 const THEME_STORAGE_KEY = 'aldrin-portfolio-theme';
 const DARK_THEME_COLOR = '#0b0c0f';
@@ -109,6 +110,33 @@ function App() {
       // Theme still works for the current visit when storage is unavailable.
     }
   }, [isDarkMode, isDarkModeActive]);
+
+  useEffect(() => {
+    const prewarmInactiveRenderer = () => {
+      prewarmBackgroundRenderer(isLightModeActive ? 'dark' : 'light');
+    };
+    const idleWindow = window as typeof window & {
+      requestIdleCallback?: Window['requestIdleCallback'];
+      cancelIdleCallback?: Window['cancelIdleCallback'];
+    };
+    let fallbackTimer: number | undefined;
+    let idleCallback: number | undefined;
+
+    if (idleWindow.requestIdleCallback) {
+      idleCallback = idleWindow.requestIdleCallback(prewarmInactiveRenderer, {
+        timeout: 1200,
+      });
+    } else {
+      fallbackTimer = window.setTimeout(prewarmInactiveRenderer, 160);
+    }
+
+    return () => {
+      if (idleCallback !== undefined && idleWindow.cancelIdleCallback) {
+        idleWindow.cancelIdleCallback(idleCallback);
+      }
+      if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
+    };
+  }, [isLightModeActive]);
 
   useEffect(() => {
     const observerOptions = {

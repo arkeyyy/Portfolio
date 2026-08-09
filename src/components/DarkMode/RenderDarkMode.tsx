@@ -10,6 +10,7 @@ import type {
   DeviceOrientationSession,
   RendererSession,
 } from '../backgroundRendererSession';
+import { registerRendererPrewarmer } from '../backgroundRendererPrewarm';
 
 type Rgb = [number, number, number];
 type PlanetKind = 'violet' | 'amber' | 'rocky' | 'ocean' | 'ice';
@@ -2439,6 +2440,53 @@ function createCloudSprites(): CloudSprites | null {
     lastAccentColor: '',
   };
 }
+
+type DarkModeSpriteBundle = {
+  cloudSprites: CloudSprites;
+  auroraSprites: AuroraSprites;
+  quasarSprite: HTMLCanvasElement;
+  libraSprites: ConstellationSprites;
+  cancerSprites: ConstellationSprites;
+  vortexSprites: VortexSprites;
+  distantCycloneSprites: DistantCycloneSprites;
+};
+
+let darkModeSpriteCache: DarkModeSpriteBundle | null = null;
+
+function getDarkModeSpriteBundle(): DarkModeSpriteBundle | null {
+  if (darkModeSpriteCache) return darkModeSpriteCache;
+
+  const cloudSprites = createCloudSprites();
+  const auroraSprites = createAuroraSprites();
+  const quasarSprite = createQuasarSprite();
+  const libraSprites = createLibraSprites();
+  const cancerSprites = createCancerSprites();
+  const vortexSprites = createVortexSprites();
+  const distantCycloneSprites = createDistantCycloneSprites();
+  if (
+    !cloudSprites
+    || !auroraSprites
+    || !vortexSprites
+    || !distantCycloneSprites
+  ) return null;
+
+  darkModeSpriteCache = {
+    cloudSprites,
+    auroraSprites,
+    quasarSprite,
+    libraSprites,
+    cancerSprites,
+    vortexSprites,
+    distantCycloneSprites,
+  };
+  return darkModeSpriteCache;
+}
+
+function prewarmDarkModeRenderer() {
+  getDarkModeSpriteBundle();
+}
+
+registerRendererPrewarmer('dark', prewarmDarkModeRenderer);
 
 function updateCloudTint(
   canvas: HTMLCanvasElement,
@@ -5242,19 +5290,17 @@ export default function RenderDarkMode({
     const context = canvas?.getContext('2d');
     const background = canvas?.parentElement;
     if (!canvas || !context || !background) return;
-    const cloudSprites = createCloudSprites();
-    const auroraSprites = createAuroraSprites();
-    const quasarSprite = createQuasarSprite();
-    const libraSprites = createLibraSprites();
-    const cancerSprites = createCancerSprites();
-    const vortexSprites = createVortexSprites();
-    const distantCycloneSprites = createDistantCycloneSprites();
-    if (
-      !cloudSprites
-      || !auroraSprites
-      || !vortexSprites
-      || !distantCycloneSprites
-    ) return;
+    const sprites = getDarkModeSpriteBundle();
+    if (!sprites) return;
+    const {
+      cloudSprites,
+      auroraSprites,
+      quasarSprite,
+      libraSprites,
+      cancerSprites,
+      vortexSprites,
+      distantCycloneSprites,
+    } = sprites;
 
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const coarsePointer = window.matchMedia('(pointer: coarse)');

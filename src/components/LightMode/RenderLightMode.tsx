@@ -10,6 +10,7 @@ import type {
   LightRendererSnapshot,
   RendererSession,
 } from '../backgroundRendererSession';
+import { registerRendererPrewarmer } from '../backgroundRendererPrewarm';
 
 type RenderLightModeProps = {
   activeColor: string;
@@ -439,6 +440,19 @@ function createAtmosphericSprites(): AtmosphericSprites {
     sun: createSunSprite(),
   };
 }
+
+let atmosphericSpriteCache: AtmosphericSprites | null = null;
+
+function getAtmosphericSprites() {
+  atmosphericSpriteCache ??= createAtmosphericSprites();
+  return atmosphericSpriteCache;
+}
+
+function prewarmLightModeRenderer() {
+  getAtmosphericSprites();
+}
+
+registerRendererPrewarmer('light', prewarmLightModeRenderer);
 
 function getCloudWidth(sceneWidth: number, compact: boolean, spec: CloudSpec) {
   if (spec.layer === 'far') {
@@ -961,7 +975,7 @@ export default function RenderLightMode({
     const context = canvas.getContext('2d', { alpha: false });
     if (!context) return;
 
-    const sprites = createAtmosphericSprites();
+    const sprites = getAtmosphericSprites();
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const coarsePointer = window.matchMedia('(pointer: coarse)');
     const parallaxPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
