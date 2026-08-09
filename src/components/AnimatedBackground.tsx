@@ -3025,10 +3025,10 @@ function createScene(
     sprites: libraSprites,
   };
   const cancerWidth = compact
-    ? clamp(width * 0.22, 70, 88)
-    : clamp(width * 0.073, 88, 116);
+    ? clamp(width * 0.275, 88, 110)
+    : clamp(width * 0.092, 110, 144);
   const cancer: Constellation = {
-    centerX: compact ? width * 0.8 : width - cancerWidth * 0.8,
+    centerX: compact ? width * 0.8 : width - cancerWidth * 0.68,
     centerY: height * (compact ? 0.51 : 0.49),
     width: cancerWidth,
     height: cancerWidth * 1.08,
@@ -5013,6 +5013,28 @@ function drawScene(
     parallax,
     DEPTH_FIELD_LAYERS.libraHaze,
   );
+  drawConstellation(
+    context,
+    scene,
+    scene.cancer,
+    time,
+    renderTheme,
+    renderTheme.cancer,
+    reducedMotion,
+    parallax,
+    DEPTH_FIELD_LAYERS.cancer,
+  );
+  drawConstellation(
+    context,
+    scene,
+    scene.libra,
+    time,
+    renderTheme,
+    renderTheme.libra,
+    reducedMotion,
+    parallax,
+    DEPTH_FIELD_LAYERS.libra,
+  );
   drawAtmosphericFogStage(
     context,
     scene,
@@ -5065,17 +5087,6 @@ function drawScene(
     parallax,
     DEPTH_FIELD_LAYERS.distantRing,
   );
-  drawConstellation(
-    context,
-    scene,
-    scene.cancer,
-    time,
-    renderTheme,
-    renderTheme.cancer,
-    reducedMotion,
-    parallax,
-    DEPTH_FIELD_LAYERS.cancer,
-  );
   drawStarClusterSprites(
     context,
     scene,
@@ -5085,17 +5096,6 @@ function drawScene(
     reducedMotion,
     'far',
     parallax,
-  );
-  drawConstellation(
-    context,
-    scene,
-    scene.libra,
-    time,
-    renderTheme,
-    renderTheme.libra,
-    reducedMotion,
-    parallax,
-    DEPTH_FIELD_LAYERS.libra,
   );
   drawFieldStars(context, scene, time, renderTheme, reducedMotion, parallax);
   drawGoldStars(context, scene, time, renderTheme, reducedMotion, parallax);
