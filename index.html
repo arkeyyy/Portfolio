@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark" style="color-scheme: dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
@@ -14,31 +14,8 @@
       name="description"
       content="Developer portfolio - selected software projects, skills, certifications, education, and contact information."
     />
-    <meta name="theme-color" content="#e9edf7" />
+    <meta name="theme-color" content="#0b0c0f" />
     <title>Suse Developer Portfolio</title>
-    <script>
-      (() => {
-        const root = document.documentElement;
-        let savedTheme = null;
-
-        try {
-          savedTheme = localStorage.getItem('aldrin-portfolio-theme');
-        } catch {
-          // Continue with the system theme when storage is unavailable.
-        }
-
-        const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
-        const isDark =
-          savedTheme === 'dark' || (savedTheme !== 'light' && prefersDark);
-        const themeColor = isDark ? '#0b0c0f' : '#e9edf7';
-
-        root.classList.toggle('dark', isDark);
-        root.style.colorScheme = isDark ? 'dark' : 'light';
-        document
-          .querySelector('meta[name="theme-color"]')
-          ?.setAttribute('content', themeColor);
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

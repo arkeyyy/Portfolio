@@ -513,6 +513,16 @@ html.background-view-active body {
   background: var(--surface-muted);
 }
 
+.theme-toggle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.theme-toggle-button:disabled:hover {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--surface-muted) 74%, transparent);
+}
+
 .icon-button svg {
   width: 19px;
   height: 19px;

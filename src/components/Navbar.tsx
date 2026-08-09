@@ -1,52 +1,28 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Eye, Menu, Moon, Sun, X } from 'lucide-react';
 import { sectionById, sections } from '../sectionTheme';
 import type { SectionId } from '../sectionTheme';
 
-const THEME_STORAGE_KEY = 'aldrin-portfolio-theme';
-const DARK_THEME_COLOR = '#0b0c0f';
-const LIGHT_THEME_COLOR = '#e9edf7';
-
-function getInitialTheme() {
-  try {
-    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (savedTheme === 'dark') return true;
-    if (savedTheme === 'light') return false;
-  } catch {
-    // Storage can be unavailable in hardened/private browser contexts.
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
-
 type NavbarProps = {
   activeSection: SectionId;
+  isDarkMode: boolean;
+  isThemeToggleDisabled: boolean;
+  onThemeToggle: () => void;
   onHideInterface: () => void;
 };
 
-export default function Navbar({ activeSection, onHideInterface }: NavbarProps) {
-  const [isDarkMode, setIsDarkMode] = useState(getInitialTheme);
+export default function Navbar({
+  activeSection,
+  isDarkMode,
+  isThemeToggleDisabled,
+  onThemeToggle,
+  onHideInterface,
+}: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const activeTheme = sectionById[activeSection];
   const activeIndex = sections.findIndex((section) => section.id === activeSection);
-
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle('dark', isDarkMode);
-    root.style.colorScheme = isDarkMode ? 'dark' : 'light';
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute(
-        'content',
-        isDarkMode ? DARK_THEME_COLOR : LIGHT_THEME_COLOR,
-      );
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, isDarkMode ? 'dark' : 'light');
-    } catch {
-      // Theme still works for the current visit when storage is unavailable.
-    }
-  }, [isDarkMode]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -78,6 +54,11 @@ export default function Navbar({ activeSection, onHideInterface }: NavbarProps) 
         ?.focus({ preventScroll: true });
     });
   };
+  const themeToggleLabel = isThemeToggleDisabled
+    ? 'Light mode coming soon'
+    : isDarkMode
+      ? 'Switch to light mode'
+      : 'Switch to dark mode';
 
   return (
     <nav className="site-nav" aria-label="Primary navigation">
@@ -125,11 +106,12 @@ export default function Navbar({ activeSection, onHideInterface }: NavbarProps) 
           <div className="nav-actions">
             <button
               type="button"
-              onClick={() => setIsDarkMode((current) => !current)}
-              className="icon-button"
+              onClick={onThemeToggle}
+              className="icon-button theme-toggle-button"
               style={{ color: activeTheme.ink }}
-              aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              disabled={isThemeToggleDisabled}
+              aria-label={themeToggleLabel}
+              title={themeToggleLabel}
             >
               {isDarkMode ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
             </button>

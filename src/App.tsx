@@ -7,16 +7,59 @@ import CertificationsPage from './components/CertificationsPage';
 import EducationPage from './components/EducationPage';
 import ContactPage from './components/ContactPage';
 import Footer from './components/Footer';
-import AnimatedBackground from './components/AnimatedBackground';
-import { useState, useEffect } from 'react';
+import RenderDarkMode from './components/DarkMode/RenderDarkMode';
+import RenderLightMode from './components/LightMode/RenderLightMode';
+import { useState, useEffect, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { isSectionId, sectionById, sections } from './sectionTheme';
 import type { SectionId } from './sectionTheme';
 
+const THEME_STORAGE_KEY = 'aldrin-portfolio-theme';
+const DARK_THEME_COLOR = '#0b0c0f';
+const LIGHT_THEME_COLOR = '#e9edf7';
+const LIGHT_MODE_AVAILABLE: boolean = false;
+
+function getInitialTheme() {
+  if (!LIGHT_MODE_AVAILABLE) return true;
+
+  try {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedTheme === 'dark') return true;
+    if (savedTheme === 'light') return false;
+  } catch {
+    // Storage can be unavailable in hardened/private browser contexts.
+  }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 function App() {
   const [activeSection, setActiveSection] = useState<SectionId>('about');
+  const [isDarkMode, setIsDarkMode] = useState(getInitialTheme);
   const [isInterfaceHidden, setIsInterfaceHidden] = useState(false);
   const [isBackgroundHintVisible, setIsBackgroundHintVisible] = useState(false);
+  const isLightModeActive = LIGHT_MODE_AVAILABLE && !isDarkMode;
+  const isDarkModeActive = !isLightModeActive;
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('dark', isDarkModeActive);
+    root.style.colorScheme = isDarkModeActive ? 'dark' : 'light';
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute(
+        'content',
+        isDarkModeActive ? DARK_THEME_COLOR : LIGHT_THEME_COLOR,
+      );
+
+    if (!LIGHT_MODE_AVAILABLE) return;
+
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, isDarkMode ? 'dark' : 'light');
+    } catch {
+      // Theme still works for the current visit when storage is unavailable.
+    }
+  }, [isDarkMode, isDarkModeActive]);
 
   useEffect(() => {
     const observerOptions = {
@@ -117,6 +160,10 @@ function App() {
     '--active-color': activeTheme.color,
     '--active-ink': activeTheme.ink,
   } as CSSProperties;
+  const handleThemeToggle = () => {
+    if (!LIGHT_MODE_AVAILABLE) return;
+    setIsDarkMode((current) => !current);
+  };
 
   return (
     <div
@@ -126,7 +173,11 @@ function App() {
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <AnimatedBackground activeColor={activeTheme.color} />
+      {isLightModeActive ? (
+        <RenderLightMode activeColor={activeTheme.color} />
+      ) : (
+        <RenderDarkMode activeColor={activeTheme.color} />
+      )}
 
       <div
         className="site-interface"
@@ -135,6 +186,9 @@ function App() {
       >
         <Navbar
           activeSection={activeSection}
+          isDarkMode={isDarkModeActive}
+          isThemeToggleDisabled={!LIGHT_MODE_AVAILABLE}
+          onThemeToggle={handleThemeToggle}
           onHideInterface={() => {
             setIsBackgroundHintVisible(false);
             setIsInterfaceHidden(true);
