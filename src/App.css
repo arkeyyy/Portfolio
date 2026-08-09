@@ -1040,9 +1040,10 @@ html.background-view-active body {
 
 .project-card-labels {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .confidential-label {
@@ -2062,6 +2063,26 @@ html.background-view-active body {
 }
 
 @media (max-width: 540px) {
+  .project-card-topline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .project-card-labels {
+    width: 100%;
+    gap: 4px;
+  }
+
+  .featured-label,
+  .confidential-label {
+    padding: 5px 7px;
+    font-size: 0.6rem;
+  }
+
+  .confidential-label {
+    letter-spacing: 0.045em;
+  }
+
   .nav-bar {
     border-radius: 17px;
   }

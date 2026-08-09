@@ -111,13 +111,13 @@ export default function ProjectsPage() {
                 <Code2 />
               </div>
               <div className="project-card-labels">
-                {project.featured && <span className="featured-label">Featured build</span>}
                 {project.confidential && (
                   <span className="confidential-label">
                     <LockKeyhole aria-hidden="true" />
                     Company confidential
                   </span>
                 )}
+                {project.featured && <span className="featured-label">Featured build</span>}
               </div>
             </div>
 
