@@ -95,12 +95,10 @@ export default function ProjectsPage() {
             <div className="project-card-glow" aria-hidden="true" />
 
             <div className="project-card-topline">
-              <span className="project-index">{String(project.id).padStart(2, '0')}</span>
+              <div className="project-symbol" aria-hidden="true">
+                <Code2 />
+              </div>
               {project.featured && <span className="featured-label">Featured build</span>}
-            </div>
-
-            <div className="project-symbol" aria-hidden="true">
-              <Code2 />
             </div>
 
             <div className="project-content">

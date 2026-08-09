@@ -893,7 +893,7 @@ html.background-view-active body {
 .project-card {
   position: relative;
   display: flex;
-  min-height: 390px;
+  min-height: 350px;
   grid-column: span 2;
   flex-direction: column;
   overflow: hidden;
@@ -907,7 +907,7 @@ html.background-view-active body {
 }
 
 .project-card-featured {
-  min-height: 440px;
+  min-height: 400px;
   grid-column: span 3;
 }
 
@@ -934,13 +934,12 @@ html.background-view-active body {
   position: relative;
   z-index: 1;
   display: flex;
-  min-height: 28px;
+  min-height: 48px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.project-index,
 .featured-label,
 .project-category {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -948,10 +947,6 @@ html.background-view-active body {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-.project-index {
-  color: var(--text-tertiary);
 }
 
 .featured-label {
@@ -968,7 +963,6 @@ html.background-view-active body {
   display: grid;
   width: 48px;
   height: 48px;
-  margin-top: 24px;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--projects) 38%, var(--border));
   border-radius: 14px;
