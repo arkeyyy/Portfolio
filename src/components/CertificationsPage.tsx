@@ -43,7 +43,7 @@ export default function CertificationsPage() {
       />
 
       <div className="credentials-grid">
-        {certifications.map((certification, index) => (
+        {certifications.map((certification) => (
           <article key={certification.title} className="credential-card">
             <div className="credential-logo">
               <img
@@ -67,7 +67,6 @@ export default function CertificationsPage() {
 
             <div className="credential-mark" aria-hidden="true">
               <Award aria-hidden="true" />
-              <span>{String(index + 1).padStart(2, '0')}</span>
             </div>
           </article>
         ))}

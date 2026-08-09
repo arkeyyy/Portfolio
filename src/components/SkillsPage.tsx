@@ -99,10 +99,9 @@ export default function SkillsPage() {
       />
 
       <div className="skills-grid">
-        {skillCategories.map((category, index) => (
+        {skillCategories.map((category) => (
           <article key={category.title} className="skill-panel">
             <header className="skill-panel-header">
-              <span>{String(index + 1).padStart(2, '0')}</span>
               <div>
                 <h3>{category.title}</h3>
                 <p>{category.description}</p>
