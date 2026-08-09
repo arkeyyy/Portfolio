@@ -58,7 +58,7 @@ export default function AboutPage() {
           <figure className="portrait-card">
             <img
               src={pic}
-              alt="Portrait of Aldrin Suse outdoors"
+              alt="Portrait photo"
               width="1532"
               height="1532"
               decoding="async"
@@ -66,12 +66,12 @@ export default function AboutPage() {
             />
             <figcaption className="portrait-caption">
               <span>Current focus</span>
-              <strong>Full-stack systems &amp; thoughtful interfaces</strong>
+              <strong>Full-stack systems, Frontend Development &amp; Thoughtful Interfaces</strong>
             </figcaption>
           </figure>
           <div className="portrait-note" aria-hidden="true">
             <span className="portrait-note-dot" />
-            Building, learning, iterating
+            Learning, Exploring, &amp; Building
           </div>
         </div>
       </div>
