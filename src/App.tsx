@@ -142,7 +142,7 @@ function App() {
         />
 
         <div className="site-content">
-          <main id="main-content" className="content-frame" tabIndex={-1}>
+          <main id="main-content" className="site-main content-frame" tabIndex={-1}>
             <AboutPage />
             <ProjectsPage />
             <SkillsPage />
