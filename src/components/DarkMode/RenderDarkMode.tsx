@@ -4,13 +4,13 @@ import {
   cloneRendererRgb,
   isRendererCameraSnapshot,
   isRendererRgbSnapshot,
-} from '../backgroundRendererSession';
+} from '../../background-renderer/session';
 import type {
   DarkRendererSnapshot,
   DeviceOrientationSession,
   RendererSession,
-} from '../backgroundRendererSession';
-import { registerRendererPrewarmer } from '../backgroundRendererPrewarm';
+} from '../../background-renderer/session';
+import { registerRendererPrewarmer } from '../../background-renderer/prewarm';
 
 type Rgb = [number, number, number];
 type PlanetKind = 'violet' | 'amber' | 'rocky' | 'ocean' | 'ice';

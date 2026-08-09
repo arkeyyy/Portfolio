@@ -19,9 +19,9 @@ import type {
   DeviceOrientationSessionState,
   LightRendererSnapshot,
   RendererSession,
-} from './components/backgroundRendererSession';
-import { requestDeviceOrientationPermission } from './components/backgroundRendererSession';
-import { prewarmBackgroundRenderer } from './components/backgroundRendererPrewarm';
+} from './background-renderer/session';
+import { requestDeviceOrientationPermission } from './background-renderer/session';
+import { prewarmBackgroundRenderer } from './background-renderer/prewarm';
 
 const THEME_STORAGE_KEY = 'aldrin-portfolio-theme';
 const DARK_THEME_COLOR = '#0b0c0f';

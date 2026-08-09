@@ -4,13 +4,13 @@ import {
   cloneRendererRgb,
   isRendererCameraSnapshot,
   isRendererRgbSnapshot,
-} from '../backgroundRendererSession';
+} from '../../background-renderer/session';
 import type {
   DeviceOrientationSession,
   LightRendererSnapshot,
   RendererSession,
-} from '../backgroundRendererSession';
-import { registerRendererPrewarmer } from '../backgroundRendererPrewarm';
+} from '../../background-renderer/session';
+import { registerRendererPrewarmer } from '../../background-renderer/prewarm';
 
 type RenderLightModeProps = {
   activeColor: string;
