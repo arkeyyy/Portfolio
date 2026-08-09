@@ -986,6 +986,7 @@ html.background-view-active body {
 }
 
 .featured-label,
+.confidential-label,
 .project-category {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.68rem;
@@ -1000,6 +1001,31 @@ html.background-view-active body {
   border-radius: 999px;
   background: color-mix(in srgb, var(--projects) 13%, transparent);
   color: var(--projects-ink);
+}
+
+.project-card-labels {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.confidential-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--education) 38%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--education) 12%, transparent);
+  color: var(--education-ink);
+  letter-spacing: 0.075em;
+}
+
+.confidential-label svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
 }
 
 .project-symbol {
@@ -1043,6 +1069,13 @@ html.background-view-active body {
 
 .project-card-featured .project-content h3 {
   font-size: clamp(2rem, 3.5vw, 2.8rem);
+}
+
+.project-card-featured .project-content h3.project-title-compact {
+  max-width: 23ch;
+  font-size: clamp(1.75rem, 2.7vw, 2.25rem);
+  letter-spacing: -0.035em;
+  line-height: 1.1;
 }
 
 .project-description {
