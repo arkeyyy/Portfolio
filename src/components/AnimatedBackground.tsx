@@ -158,6 +158,32 @@ type Quasar = {
   particles: QuasarLightParticle[];
 };
 
+type LibraNodeSpec = {
+  x: number;
+  y: number;
+  scale: number;
+  phase: number;
+  twinkleSpeed: number;
+  colorIndex: 0 | 1;
+};
+
+type LibraSprites = {
+  cloud: HTMLCanvasElement;
+  lines: HTMLCanvasElement;
+  blueStar: HTMLCanvasElement;
+  greenStar: HTMLCanvasElement;
+};
+
+type LibraConstellation = {
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
+  rotation: number;
+  phase: number;
+  sprites: LibraSprites;
+};
+
 type VortexSprites = {
   alpha: HTMLCanvasElement;
   active: HTMLCanvasElement;
@@ -273,6 +299,11 @@ type CosmicRenderTheme = {
     lensAlpha: number;
     particleAlpha: number;
   };
+  libra: {
+    cloudAlpha: number;
+    lineAlpha: number;
+    starAlpha: number;
+  };
   distantCyclone: {
     hazeAlpha: number;
     cyanAlpha: number;
@@ -344,6 +375,7 @@ type Scene = {
   clouds: CloudSprites;
   aurora: AuroraSprites;
   quasar: Quasar;
+  libra: LibraConstellation;
   distantCyclone: DistantCyclone;
   vortex: Vortex;
 };
@@ -437,6 +469,16 @@ const DEPTH_FIELD_STAR_STRENGTH = {
   cluster: 0.62,
 } as const;
 const DEPTH_FIELD_LAYERS = {
+  libraHaze: {
+    translationDepth: 0.46 * PARALLAX_DEPTH.starClusters,
+    perspectiveDepth: 0.46,
+    perspectiveStrength: DEPTH_FIELD_STAR_STRENGTH.cluster,
+  },
+  libra: {
+    translationDepth: PARALLAX_DEPTH.far,
+    perspectiveDepth: 0.54,
+    perspectiveStrength: 0.58,
+  },
   distantRing: {
     translationDepth: PARALLAX_DEPTH.far,
     perspectiveDepth: 1,
@@ -532,10 +574,40 @@ const ABOUT_CLOUD_ACCENT: Rgb = [158, 88, 255];
 const FOREGROUND_CLOUD_PURPLE: Rgb = [148, 82, 255];
 const QUASAR_LIGHT_BLUE: Rgb = [112, 220, 255];
 const QUASAR_PURPLE: Rgb = [178, 104, 255];
+const LIBRA_BLUE: Rgb = [94, 205, 255];
+const LIBRA_GREEN: Rgb = [80, 231, 181];
+const LIBRA_WHITE: Rgb = [250, 253, 255];
+const LIBRA_LINE: Rgb = [155, 220, 248];
+const LIBRA_HAZE_BLUE: Rgb = [72, 142, 184];
+const LIBRA_HAZE_TEAL: Rgb = [68, 128, 132];
+const LIBRA_HAZE_GREEN: Rgb = [74, 160, 132];
+const LIBRA_HAZE_VIOLET: Rgb = [76, 82, 148];
+const LIBRA_HAZE_SCALE = { width: 3.05, height: 2.05 } as const;
 const VORTEX_STAR_WHITE: Rgb = [246, 249, 255];
 const CYCLONE_CLOUD_PURPLE: Rgb = [158, 86, 235];
 const CYCLONE_CLOUD_PINK: Rgb = [255, 82, 198];
 const CYCLONE_CLOUD_CYAN: Rgb = [105, 226, 255];
+const LIBRA_NODES: readonly LibraNodeSpec[] = [
+  { x: 0.5, y: 0.03, scale: 0.86, phase: 0.4, twinkleSpeed: 0.00112, colorIndex: 0 },
+  { x: 0.33, y: 0.31, scale: 0.72, phase: 2.1, twinkleSpeed: 0.00136, colorIndex: 1 },
+  { x: 0.19, y: 0.38, scale: 0.76, phase: 4.7, twinkleSpeed: 0.00102, colorIndex: 0 },
+  { x: 0.02, y: 0.46, scale: 1.05, phase: 1.35, twinkleSpeed: 0.00124, colorIndex: 0 },
+  { x: 0.98, y: 0.26, scale: 1.16, phase: 3.25, twinkleSpeed: 0.00108, colorIndex: 1 },
+  { x: 0.9, y: 0.73, scale: 0.88, phase: 5.35, twinkleSpeed: 0.00131, colorIndex: 0 },
+  { x: 0.53, y: 0.9, scale: 0.96, phase: 2.9, twinkleSpeed: 0.00117, colorIndex: 1 },
+  { x: 0.53, y: 0.99, scale: 0.7, phase: 0.9, twinkleSpeed: 0.00143, colorIndex: 0 },
+];
+const LIBRA_EDGES: readonly (readonly [number, number])[] = [
+  [0, 1],
+  [1, 2],
+  [2, 3],
+  [0, 4],
+  [0, 5],
+  [4, 5],
+  [5, 6],
+  [6, 7],
+];
+const LIBRA_SPRITE_PADDING_RATIO = 30 / 512;
 const CYCLONE_CLOUD_WHITE: Rgb = [255, 249, 255];
 const CYCLONE_CLOUD_ENVELOPE_SCALE = 1.075;
 const CYCLONE_CLOUD_NORMAL_SCATTER = 1.1;
@@ -637,6 +709,7 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     },
     aurora: { activeAlpha: 0.76, purpleAlpha: 0.32 },
     quasar: { spriteAlpha: 0.82, lensAlpha: 0.48, particleAlpha: 0.76 },
+    libra: { cloudAlpha: 0.72, lineAlpha: 0.64, starAlpha: 0.96 },
     distantCyclone: {
       hazeAlpha: 0.34,
       cyanAlpha: 0.56,
@@ -697,6 +770,7 @@ const COSMIC_RENDER_THEMES: Record<'dark' | 'light', CosmicRenderTheme> = {
     },
     aurora: { activeAlpha: 0.38, purpleAlpha: 0.16 },
     quasar: { spriteAlpha: 0.5, lensAlpha: 0.28, particleAlpha: 0.46 },
+    libra: { cloudAlpha: 0.38, lineAlpha: 0.44, starAlpha: 0.82 },
     distantCyclone: {
       hazeAlpha: 0.21,
       cyanAlpha: 0.4,
@@ -1895,6 +1969,242 @@ function createQuasarSprite() {
   return canvas;
 }
 
+function createLibraCloudSprite() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 768;
+  canvas.height = 560;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+
+  const drawMistField = (
+    x: number,
+    y: number,
+    radiusX: number,
+    radiusY: number,
+    rotation: number,
+    alpha: number,
+  ) => {
+    const gradient = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+    gradient.addColorStop(0, rgba(LIBRA_WHITE, alpha));
+    gradient.addColorStop(0.34, rgba(LIBRA_WHITE, alpha * 0.76));
+    gradient.addColorStop(0.7, rgba(LIBRA_WHITE, alpha * 0.24));
+    gradient.addColorStop(1, rgba(LIBRA_WHITE, 0));
+    context.save();
+    context.translate(x, y);
+    context.rotate(rotation);
+    context.scale(radiusX, radiusY);
+    context.fillStyle = gradient;
+    context.fillRect(-1, -1, 2, 2);
+    context.restore();
+  };
+
+  // Build low-frequency atmosphere first. Several fields continue beyond the
+  // sprite bounds so no single lobe reads as a standalone cloud.
+  context.globalCompositeOperation = 'source-over';
+  context.filter = 'blur(40px)';
+  const broadFields = [
+    [0.1, 0.7, 0.46, 0.46, -0.16, 0.2],
+    [0.42, 0.48, 0.4, 0.42, 0.14, 0.17],
+    [0.8, 0.24, 0.42, 0.36, 0.22, 0.15],
+    [0.84, 0.76, 0.38, 0.34, -0.18, 0.13],
+    [0.3, 0.16, 0.34, 0.3, 0.12, 0.11],
+  ] as const;
+  for (const [x, y, radiusX, radiusY, rotation, alpha] of broadFields) {
+    drawMistField(
+      canvas.width * x,
+      canvas.height * y,
+      canvas.width * radiusX,
+      canvas.height * radiusY,
+      rotation,
+      alpha,
+    );
+  }
+
+  // Sparse secondary wisps add photographic mottling without becoming blobs.
+  context.filter = 'blur(22px)';
+  for (let wisp = 0; wisp < 16; wisp += 1) {
+    const seed = 43_900 + wisp * 31.9;
+    drawMistField(
+      canvas.width * (0.04 + seededRandom(seed + 1.1) * 0.92),
+      canvas.height * (0.06 + seededRandom(seed + 2.9) * 0.88),
+      canvas.width * (0.065 + seededRandom(seed + 4.7) * 0.075),
+      canvas.height * (0.055 + seededRandom(seed + 6.5) * 0.11),
+      (seededRandom(seed + 8.3) - 0.5) * 1.5,
+      0.032 + seededRandom(seed + 10.1) * 0.043,
+    );
+  }
+
+  // Gentle transparent cavities keep the mist irregular and preserve the
+  // darker pocket visible around the constellation center in the reference.
+  context.globalCompositeOperation = 'destination-out';
+  context.filter = 'blur(28px)';
+  for (let cavity = 0; cavity < 5; cavity += 1) {
+    const seed = 47_100 + cavity * 37.3;
+    drawMistField(
+      canvas.width * (0.2 + seededRandom(seed + 1.5) * 0.6),
+      canvas.height * (0.18 + seededRandom(seed + 3.3) * 0.64),
+      canvas.width * (0.08 + seededRandom(seed + 5.1) * 0.1),
+      canvas.height * (0.09 + seededRandom(seed + 6.9) * 0.12),
+      (seededRandom(seed + 8.7) - 0.5) * 1.4,
+      0.1 + seededRandom(seed + 10.5) * 0.08,
+    );
+  }
+  context.filter = 'none';
+
+  // A single muted wash makes the blue-green transition continuous rather
+  // than exposing individually colored cloud puffs.
+  context.globalCompositeOperation = 'source-in';
+  const colorWash = context.createLinearGradient(
+    0,
+    canvas.height,
+    canvas.width,
+    0,
+  );
+  colorWash.addColorStop(0, rgba(LIBRA_HAZE_BLUE, 1));
+  colorWash.addColorStop(0.34, rgba(LIBRA_HAZE_VIOLET, 1));
+  colorWash.addColorStop(0.68, rgba(LIBRA_HAZE_BLUE, 1));
+  colorWash.addColorStop(0.86, rgba(LIBRA_HAZE_TEAL, 1));
+  colorWash.addColorStop(1, rgba(LIBRA_HAZE_GREEN, 1));
+  context.fillStyle = colorWash;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Feather through one elliptical falloff rather than intersecting linear
+  // masks, avoiding a detectable rectangular sprite envelope.
+  context.globalCompositeOperation = 'destination-in';
+  context.save();
+  context.translate(canvas.width * 0.5, canvas.height * 0.5);
+  context.scale(canvas.width * 0.52, canvas.height * 0.5);
+  const edgeFade = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+  edgeFade.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  edgeFade.addColorStop(0.5, 'rgba(255, 255, 255, 0.92)');
+  edgeFade.addColorStop(0.76, 'rgba(255, 255, 255, 0.54)');
+  edgeFade.addColorStop(0.92, 'rgba(255, 255, 255, 0.12)');
+  edgeFade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  context.fillStyle = edgeFade;
+  context.fillRect(-1, -1, 2, 2);
+  context.restore();
+  context.globalCompositeOperation = 'source-over';
+
+  return canvas;
+}
+
+function createLibraLinesSprite() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const padding = canvas.width * LIBRA_SPRITE_PADDING_RATIO;
+  const width = canvas.width - padding * 2;
+  const height = canvas.height - padding * 2;
+  const traceEdges = () => {
+    context.beginPath();
+    for (const [fromIndex, toIndex] of LIBRA_EDGES) {
+      const from = LIBRA_NODES[fromIndex];
+      const to = LIBRA_NODES[toIndex];
+      context.moveTo(padding + from.x * width, padding + from.y * height);
+      context.lineTo(padding + to.x * width, padding + to.y * height);
+    }
+  };
+  const glowColor = mixRgb(LIBRA_BLUE, LIBRA_GREEN, 0.42);
+
+  context.globalCompositeOperation = 'lighter';
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.filter = 'blur(5px)';
+  context.strokeStyle = rgba(glowColor, 0.16);
+  context.lineWidth = 7;
+  traceEdges();
+  context.stroke();
+  context.filter = 'blur(1.2px)';
+  context.strokeStyle = rgba(LIBRA_BLUE, 0.28);
+  context.lineWidth = 3;
+  traceEdges();
+  context.stroke();
+  context.filter = 'none';
+  context.strokeStyle = rgba(LIBRA_LINE, 0.62);
+  context.lineWidth = 1.15;
+  traceEdges();
+  context.stroke();
+
+  return canvas;
+}
+
+function createLibraStarSprite(primary: Rgb, secondary: Rgb) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 144;
+  canvas.height = 144;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const center = canvas.width * 0.5;
+
+  const halo = context.createRadialGradient(center, center, 0, center, center, 68);
+  halo.addColorStop(0, rgba(LIBRA_WHITE, 0.94));
+  halo.addColorStop(0.08, rgba(primary, 0.72));
+  halo.addColorStop(0.26, rgba(secondary, 0.28));
+  halo.addColorStop(0.62, rgba(primary, 0.075));
+  halo.addColorStop(1, rgba(primary, 0));
+  context.fillStyle = halo;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const drawRay = (rotation: number, length: number, width: number, alpha: number) => {
+    context.save();
+    context.translate(center, center);
+    context.rotate(rotation);
+    const ray = context.createLinearGradient(-length, 0, length, 0);
+    ray.addColorStop(0, rgba(primary, 0));
+    ray.addColorStop(0.36, rgba(primary, alpha * 0.2));
+    ray.addColorStop(0.5, rgba(LIBRA_WHITE, alpha));
+    ray.addColorStop(0.64, rgba(primary, alpha * 0.2));
+    ray.addColorStop(1, rgba(primary, 0));
+    context.fillStyle = ray;
+    context.fillRect(-length, -width * 0.5, length * 2, width);
+    context.restore();
+  };
+
+  context.globalCompositeOperation = 'lighter';
+  context.filter = 'blur(3px)';
+  drawRay(0, 61, 4.2, 0.48);
+  drawRay(Math.PI * 0.5, 61, 4.2, 0.48);
+  drawRay(Math.PI * 0.25, 39, 2.5, 0.24);
+  drawRay(-Math.PI * 0.25, 39, 2.5, 0.24);
+  context.filter = 'none';
+  drawRay(0, 58, 1.8, 0.96);
+  drawRay(Math.PI * 0.5, 58, 1.8, 0.96);
+  drawRay(Math.PI * 0.25, 32, 1.05, 0.58);
+  drawRay(-Math.PI * 0.25, 32, 1.05, 0.58);
+
+  context.strokeStyle = rgba(secondary, 0.36);
+  context.lineWidth = 2.2;
+  context.beginPath();
+  context.ellipse(center, center, 17, 4.5, -0.12, 0, TAU);
+  context.stroke();
+
+  const core = context.createRadialGradient(center, center, 0, center, center, 13);
+  core.addColorStop(0, rgba(LIBRA_WHITE, 1));
+  core.addColorStop(0.18, rgba(LIBRA_WHITE, 0.98));
+  core.addColorStop(0.46, rgba(primary, 0.86));
+  core.addColorStop(1, rgba(primary, 0));
+  context.fillStyle = core;
+  context.beginPath();
+  context.arc(center, center, 13, 0, TAU);
+  context.fill();
+  context.fillStyle = rgba(LIBRA_WHITE, 1);
+  context.fillRect(center - 2, center - 2, 4, 4);
+  context.globalCompositeOperation = 'source-over';
+
+  return canvas;
+}
+
+function createLibraSprites(): LibraSprites {
+  return {
+    cloud: createLibraCloudSprite(),
+    lines: createLibraLinesSprite(),
+    blueStar: createLibraStarSprite(LIBRA_BLUE, LIBRA_GREEN),
+    greenStar: createLibraStarSprite(LIBRA_GREEN, LIBRA_BLUE),
+  };
+}
+
 function createTintCanvas(alphaCanvas: HTMLCanvasElement, color: Rgb) {
   const canvas = document.createElement('canvas');
   canvas.width = alphaCanvas.width;
@@ -2471,6 +2781,7 @@ function createScene(
   clouds: CloudSprites,
   aurora: AuroraSprites,
   quasarSprite: HTMLCanvasElement,
+  libraSprites: LibraSprites,
   vortexSprites: VortexSprites,
   distantCycloneSprites: DistantCycloneSprites,
   pixelRatio: number,
@@ -2592,6 +2903,18 @@ function createScene(
     sprite: quasarSprite,
     particles: createQuasarLightParticles(compact ? 10 : 16),
   };
+  const libraWidth = compact
+    ? clamp(width * 0.34, 118, 150)
+    : clamp(width * 0.12, 145, 190);
+  const libra: LibraConstellation = {
+    centerX: width * (compact ? 0.24 : 0.17),
+    centerY: height * (compact ? 0.26 : 0.245),
+    width: libraWidth,
+    height: libraWidth * (compact ? 1.05 : 1.08),
+    rotation: compact ? -0.04 : -0.055,
+    phase: 3.35,
+    sprites: libraSprites,
+  };
   const vortex: Vortex = {
     sprites: vortexSprites,
     stars: createVortexStars(compact ? 24 : 46),
@@ -2668,6 +2991,7 @@ function createScene(
     clouds,
     aurora,
     quasar,
+    libra,
     distantCyclone,
     vortex,
   };
@@ -2835,6 +3159,143 @@ function drawQuasar(
     drawStar(context, x, y, particle.size, color, alpha * 0.86);
   }
   context.restore();
+}
+
+function getLibraMotion(
+  libra: LibraConstellation,
+  time: number,
+  reducedMotion: boolean,
+): [number, number, number, number] {
+  if (reducedMotion) {
+    return [libra.centerX, libra.centerY, libra.rotation, 1];
+  }
+
+  const driftX = Math.sin(time * 0.000029 + libra.phase) * 3.4;
+  const driftY = Math.cos(time * 0.000023 + libra.phase * 0.72) * 2.6;
+  const rotation = libra.rotation + Math.sin(time * 0.000019 + libra.phase) * 0.012;
+  const pulse = 0.985 + Math.sin(time * 0.00031 + libra.phase) * 0.015;
+  return [libra.centerX + driftX, libra.centerY + driftY, rotation, pulse];
+}
+
+function getLibraHazeMotion(
+  libra: LibraConstellation,
+  time: number,
+  reducedMotion: boolean,
+): [number, number, number, number] {
+  const baseX = libra.centerX - libra.width * 0.08;
+  const baseY = libra.centerY + libra.height * 0.06;
+  const baseRotation = libra.rotation * 0.22;
+  if (reducedMotion) return [baseX, baseY, baseRotation, 1];
+
+  const driftX = Math.sin(time * 0.000013 + libra.phase * 0.63) * 4.2;
+  const driftY = Math.cos(time * 0.000011 + libra.phase * 0.81) * 3.4;
+  const rotation = baseRotation + Math.sin(time * 0.000006 + libra.phase) * 0.007;
+  const pulse = 0.992 + Math.sin(time * 0.000073 + libra.phase * 0.7) * 0.008;
+  return [baseX + driftX, baseY + driftY, rotation, pulse];
+}
+
+function drawLibraCloud(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  renderTheme: CosmicRenderTheme,
+  reducedMotion: boolean,
+  parallax: ParallaxFrame,
+) {
+  const { libra } = scene;
+  const [centerX, centerY, rotation, pulse] = getLibraHazeMotion(
+    libra,
+    time,
+    reducedMotion,
+  );
+  const surface = getDepthFieldSurface(
+    parallax,
+    centerX,
+    centerY,
+    DEPTH_FIELD_LAYERS.libraHaze,
+  );
+  const cloudWidth = libra.width * LIBRA_HAZE_SCALE.width * pulse;
+  const cloudHeight = libra.height * LIBRA_HAZE_SCALE.height * pulse;
+
+  drawOnDepthFieldSurface(context, surface, () => {
+    context.save();
+    context.translate(centerX, centerY);
+    context.rotate(rotation);
+    context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+    context.globalAlpha = renderTheme.libra.cloudAlpha * surface.alphaScale;
+    context.drawImage(
+      libra.sprites.cloud,
+      -cloudWidth * 0.5,
+      -cloudHeight * 0.5,
+      cloudWidth,
+      cloudHeight,
+    );
+    context.restore();
+  });
+}
+
+function drawLibraConstellation(
+  context: CanvasRenderingContext2D,
+  scene: Scene,
+  time: number,
+  renderTheme: CosmicRenderTheme,
+  reducedMotion: boolean,
+  parallax: ParallaxFrame,
+) {
+  const { libra } = scene;
+  const motionTime = reducedMotion ? 0 : time;
+  const [centerX, centerY, rotation, pulse] = getLibraMotion(libra, time, reducedMotion);
+  const surface = getDepthFieldSurface(
+    parallax,
+    centerX,
+    centerY,
+    DEPTH_FIELD_LAYERS.libra,
+  );
+  const linePulse = reducedMotion
+    ? 0.94
+    : 0.94 + Math.sin(motionTime * 0.00043 + libra.phase) * 0.06;
+  const contentScale = 1 - LIBRA_SPRITE_PADDING_RATIO * 2;
+  const baseStarSize = clamp(libra.width * 0.22, scene.compact ? 26 : 32, 46);
+
+  drawOnDepthFieldSurface(context, surface, () => {
+    context.save();
+    context.translate(centerX, centerY);
+    context.rotate(rotation);
+    context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
+    context.globalAlpha = renderTheme.libra.lineAlpha * linePulse * surface.alphaScale;
+    context.drawImage(
+      libra.sprites.lines,
+      -libra.width * 0.5,
+      -libra.height * 0.5,
+      libra.width,
+      libra.height,
+    );
+
+    for (const node of LIBRA_NODES) {
+      const localX = (
+        LIBRA_SPRITE_PADDING_RATIO + node.x * contentScale - 0.5
+      ) * libra.width;
+      const localY = (
+        LIBRA_SPRITE_PADDING_RATIO + node.y * contentScale - 0.5
+      ) * libra.height;
+      const twinkle = reducedMotion
+        ? 0.9
+        : 0.88 + Math.sin(motionTime * node.twinkleSpeed + node.phase) * 0.12;
+      const starSize = baseStarSize * node.scale * (0.96 + twinkle * 0.05) * pulse;
+      const sprite = node.colorIndex === 0
+        ? libra.sprites.blueStar
+        : libra.sprites.greenStar;
+      context.globalAlpha = renderTheme.libra.starAlpha * twinkle * surface.alphaScale;
+      context.drawImage(
+        sprite,
+        localX - starSize * 0.5,
+        localY - starSize * 0.5,
+        starSize,
+        starSize,
+      );
+    }
+    context.restore();
+  });
 }
 
 function getStarClusterMotion(
@@ -4368,6 +4829,14 @@ function drawScene(
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = 1;
   drawBackgroundWash(context, scene, activeColor, renderTheme);
+  drawLibraCloud(
+    context,
+    scene,
+    time,
+    renderTheme,
+    reducedMotion,
+    parallax,
+  );
   drawAtmosphericFogStage(
     context,
     scene,
@@ -4428,6 +4897,14 @@ function drawScene(
     isDark,
     reducedMotion,
     'far',
+    parallax,
+  );
+  drawLibraConstellation(
+    context,
+    scene,
+    time,
+    renderTheme,
+    reducedMotion,
     parallax,
   );
   drawFieldStars(context, scene, time, renderTheme, reducedMotion, parallax);
@@ -4568,6 +5045,7 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
     const cloudSprites = createCloudSprites();
     const auroraSprites = createAuroraSprites();
     const quasarSprite = createQuasarSprite();
+    const libraSprites = createLibraSprites();
     const vortexSprites = createVortexSprites();
     const distantCycloneSprites = createDistantCycloneSprites();
     if (
@@ -4835,6 +5313,7 @@ export default function AnimatedBackground({ activeColor }: { activeColor: strin
         cloudSprites,
         auroraSprites,
         quasarSprite,
+        libraSprites,
         vortexSprites,
         distantCycloneSprites,
         dpr,
