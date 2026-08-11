@@ -42,6 +42,7 @@ type AtmosphericSprites = {
   lavenderHaze: HTMLCanvasElement;
   distantHills: DistantHillSprites;
   river: HTMLCanvasElement;
+  foregroundTrees: HTMLCanvasElement;
   sun: HTMLCanvasElement;
 };
 
@@ -90,6 +91,16 @@ type DistantHillLayer = {
 };
 
 type RiverState = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  depthProfile: AtmosphericDepthProfile;
+  opacity: number;
+  sprite: HTMLCanvasElement;
+};
+
+type ForegroundTreeLine = {
   x: number;
   y: number;
   width: number;
@@ -149,6 +160,7 @@ type AtmosphericScene = {
   haze: HazeLayer[];
   distantHills: DistantHillLayer[];
   river: RiverState;
+  foregroundTrees: ForegroundTreeLine;
   particles: AtmosphericParticle[];
   projection: DepthProjection;
 };
@@ -183,6 +195,9 @@ const WARM_RIGHT_GLOW: Rgb = [255, 235, 196];
 const RIVER_SAGE: Rgb = [155, 166, 164];
 const RIVER_BLUE_GREY: Rgb = [155, 173, 173];
 const RIVER_REFLECTION: Rgb = [205, 214, 211];
+const FOREGROUND_TREE_BLACK: Rgb = [46, 48, 46];
+const FOREGROUND_TREE_WARM_BLACK: Rgb = [209, 179, 141];
+const FOREGROUND_TREE_BACK: Rgb = [85, 89, 85];
 const WARM_PARTICLE: Rgb = [255, 244, 220];
 const COOL_PARTICLE: Rgb = [225, 246, 255];
 const SECTION_COLOR_DURATION_MS = 1200;
@@ -205,6 +220,7 @@ const LIGHT_DEPTH_PROFILES = {
   middleCloud: { translation: 0.45, perspective: 0.4, tilt: 0.36 },
   nearHaze: { translation: 0.6, perspective: 0.56, tilt: 0.5 },
   foregroundMist: { translation: 0.78, perspective: 0.7, tilt: 0.64 },
+  foregroundTrees: { translation: 0.2, perspective: 0.15, tilt: 0.1 },
 } as const satisfies Record<string, AtmosphericDepthProfile>;
 
 const PARTICLE_DEPTH_RANGE = {
@@ -789,6 +805,855 @@ function createRiverSprite() {
   return canvas;
 }
 
+type ForestFoliageZone = Readonly<{
+  start: number;
+  end: number;
+  topStart: number;
+  topEnd: number;
+  baseY: number;
+  count: number;
+  minimumWidth: number;
+  maximumWidth: number;
+}>;
+
+type ForestPineAnchor = Readonly<{
+  x: number;
+  top: number;
+  width: number;
+  height: number;
+  opacity: number;
+  variant: number;
+  rotation?: number;
+}>;
+
+type ForestPaletteStop = Readonly<{
+  offset: number;
+  color: Rgb;
+}>;
+
+type ForestSkylinePoint = readonly [x: number, y: number];
+
+function createForestLayerCanvas(width: number, height: number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+}
+
+function drawOrganicFoliageShape(
+  context: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  radiusX: number,
+  radiusY: number,
+  random: () => number,
+  opacity: number,
+) {
+  const pointCount = 8 + Math.floor(random() * 4);
+  const points = Array.from({ length: pointCount }, (_, index) => {
+    const angle = index / pointCount * TAU;
+    const radius = 0.7 + random() * 0.32;
+    return {
+      x: centerX + Math.cos(angle) * radiusX * radius,
+      y: centerY + Math.sin(angle) * radiusY * radius,
+    };
+  });
+  const first = points[0];
+  const last = points[points.length - 1];
+  context.beginPath();
+  context.moveTo((first.x + last.x) * 0.5, (first.y + last.y) * 0.5);
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    const next = points[(index + 1) % points.length];
+    context.quadraticCurveTo(
+      point.x,
+      point.y,
+      (point.x + next.x) * 0.5,
+      (point.y + next.y) * 0.5,
+    );
+  }
+  context.closePath();
+  context.fillStyle = `rgba(255,255,255,${opacity})`;
+  context.fill();
+}
+
+function createFoliageBrush(seed: number) {
+  const width = 112;
+  const height = 82;
+  const canvas = createForestLayerCanvas(width, height);
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const random = createSeededRandom(seed);
+
+  drawOrganicFoliageShape(context, width * 0.5, height * 0.54, 31, 22, random, 0.62);
+  for (let index = 0; index < 52; index += 1) {
+    const angle = random() * TAU;
+    const distance = Math.pow(random(), 0.82);
+    drawOrganicFoliageShape(
+      context,
+      width * 0.5 + Math.cos(angle) * width * 0.34 * distance,
+      height * 0.53 + Math.sin(angle) * height * 0.31 * distance,
+      5 + random() * 13,
+      3 + random() * 8,
+      random,
+      0.2 + random() * 0.42,
+    );
+  }
+
+  for (let index = 0; index < 38; index += 1) {
+    const angle = random() * TAU;
+    drawOrganicFoliageShape(
+      context,
+      width * 0.5 + Math.cos(angle) * width * (0.3 + random() * 0.13),
+      height * 0.53 + Math.sin(angle) * height * (0.27 + random() * 0.11),
+      2.5 + random() * 6,
+      1.5 + random() * 4,
+      random,
+      0.12 + random() * 0.3,
+    );
+  }
+  return canvas;
+}
+
+function drawCanopyBranchSystem(
+  context: CanvasRenderingContext2D,
+  x: number,
+  canopyY: number,
+  canopyWidth: number,
+  canopyHeight: number,
+  random: () => number,
+) {
+  const lean = (random() - 0.5) * canopyWidth * 0.24;
+  const baseY = canopyY + canopyHeight * (0.48 + random() * 0.42);
+  const baseX = x - lean * (0.18 + random() * 0.2);
+  context.save();
+  context.strokeStyle = `rgba(255,255,255,${0.32 + random() * 0.16})`;
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.lineWidth = Math.max(1, canopyWidth * (0.017 + random() * 0.009));
+  context.beginPath();
+  context.moveTo(baseX, baseY);
+  context.quadraticCurveTo(
+    x + lean * 0.18,
+    canopyY + canopyHeight * 0.52,
+    x + lean,
+    canopyY + canopyHeight * 0.06,
+  );
+  context.stroke();
+
+  const forkCount = 4 + Math.floor(random() * 3);
+  for (let fork = 0; fork < forkCount; fork += 1) {
+    const progress = 0.18 + random() * 0.5;
+    const startY = baseY + (canopyY - baseY) * progress;
+    const startX = baseX + (lean + x - baseX) * progress;
+    const side = fork % 2 === 0 ? -1 : 1;
+    const endX = x + canopyWidth * (0.16 + random() * 0.34) * side;
+    const endY = canopyY - canopyHeight * (0.02 + random() * 0.3);
+    context.globalAlpha = 0.56 + random() * 0.2;
+    context.lineWidth = Math.max(0.65, canopyWidth * (0.007 + random() * 0.007));
+    context.beginPath();
+    context.moveTo(startX, startY);
+    context.quadraticCurveTo(
+      startX + (endX - startX) * (0.38 + random() * 0.2),
+      startY - canopyHeight * (0.06 + random() * 0.12),
+      endX,
+      endY,
+    );
+    context.stroke();
+
+    const twigSide = random() < 0.5 ? -1 : 1;
+    const twigStartX = startX + (endX - startX) * (0.56 + random() * 0.14);
+    const twigStartY = startY + (endY - startY) * (0.56 + random() * 0.14);
+    const twigEndX = twigStartX + canopyWidth * (0.07 + random() * 0.12) * twigSide;
+    const twigEndY = twigStartY - canopyHeight * (0.08 + random() * 0.13);
+    context.globalAlpha = 0.38 + random() * 0.18;
+    context.lineWidth = Math.max(0.5, canopyWidth * (0.004 + random() * 0.004));
+    context.beginPath();
+    context.moveTo(twigStartX, twigStartY);
+    context.quadraticCurveTo(
+      twigStartX + (twigEndX - twigStartX) * 0.48,
+      twigStartY - canopyHeight * 0.04,
+      twigEndX,
+      twigEndY,
+    );
+    context.stroke();
+  }
+  context.restore();
+}
+
+function createPineBrush(seed: number) {
+  const width = 220;
+  const height = 340;
+  const canvas = createForestLayerCanvas(width, height);
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const random = createSeededRandom(seed);
+  const lean = (random() - 0.5) * width * 0.07;
+
+  context.fillStyle = 'rgba(255,255,255,0.38)';
+  context.beginPath();
+  context.moveTo(width * 0.5 + lean, height * 0.025);
+  context.lineTo(width * 0.525, height * 0.99);
+  context.lineTo(width * 0.475, height * 0.99);
+  context.closePath();
+  context.fill();
+
+  const branchCount = 48;
+  for (let index = 0; index < branchCount; index += 1) {
+    const progress = 0.035 + index / (branchCount - 1) * 0.92;
+    const spineX = width * 0.5 + lean * (1 - progress);
+    const y = height * progress;
+    const halfWidth = width * (0.022 + Math.pow(progress, 0.8) * 0.43);
+    const leftReach = halfWidth * (0.76 + random() * 0.24);
+    const rightReach = halfWidth * (0.76 + random() * 0.24);
+    const thickness = height * (0.013 + progress * 0.019) * (0.88 + random() * 0.28);
+    const droop = height * (0.004 + progress * 0.014);
+    context.fillStyle = `rgba(255,255,255,${0.62 + random() * 0.28})`;
+    context.beginPath();
+    context.moveTo(spineX, y - thickness * 0.8);
+    context.quadraticCurveTo(
+      spineX + rightReach * 0.42,
+      y - thickness * 0.42,
+      spineX + rightReach,
+      y + droop,
+    );
+    context.quadraticCurveTo(
+      spineX + rightReach * 0.54,
+      y + thickness * 1.25 + droop,
+      spineX,
+      y + thickness * 0.88,
+    );
+    context.quadraticCurveTo(
+      spineX - leftReach * 0.54,
+      y + thickness * 1.2 + droop,
+      spineX - leftReach,
+      y + droop * 0.82,
+    );
+    context.quadraticCurveTo(
+      spineX - leftReach * 0.42,
+      y - thickness * 0.4,
+      spineX,
+      y - thickness * 0.8,
+    );
+    context.closePath();
+    context.fill();
+
+    if (index > 4 && index % 2 === 0) {
+      const clusterY = y + thickness * (0.15 + random() * 0.3);
+      drawOrganicFoliageShape(
+        context,
+        spineX + (random() - 0.5) * halfWidth * 0.55,
+        clusterY,
+        halfWidth * (0.24 + random() * 0.22),
+        thickness * (0.7 + random() * 0.55),
+        random,
+        0.36 + random() * 0.28,
+      );
+    }
+  }
+  drawOrganicFoliageShape(
+    context,
+    width * 0.5 + lean,
+    height * 0.035,
+    width * 0.025,
+    height * 0.03,
+    random,
+    0.82,
+  );
+  return canvas;
+}
+
+function sampleForestSkyline(
+  skyline: ReadonlyArray<ForestSkylinePoint>,
+  x: number,
+) {
+  for (let index = 0; index < skyline.length - 1; index += 1) {
+    const start = skyline[index];
+    const end = skyline[index + 1];
+    if (x < start[0] || x > end[0]) continue;
+    const mix = clamp((x - start[0]) / Math.max(0.0001, end[0] - start[0]), 0, 1);
+    const easedMix = mix * mix * (3 - 2 * mix);
+    return start[1] + (end[1] - start[1]) * easedMix;
+  }
+  return x <= skyline[0][0] ? skyline[0][1] : skyline[skyline.length - 1][1];
+}
+
+function createPineForestBand(
+  seed: number,
+  count: number,
+  skyline: ReadonlyArray<ForestSkylinePoint>,
+  baseY: number,
+  minimumOpacity: number,
+  maximumOpacity: number,
+) {
+  const random = createSeededRandom(seed);
+  return Array.from({ length: count }, (_, index): ForestPineAnchor => {
+    const horizontalStep = 1.1 / count;
+    const x = -0.05
+      + (index + 0.2 + random() * 0.6) * horizontalStep
+      + (random() - 0.5) * horizontalStep * 0.52;
+    const skylineY = sampleForestSkyline(skyline, x);
+    const top = clamp(skylineY - 0.018 - random() * 0.092, 0.035, baseY - 0.16);
+    const height = baseY + 0.08 + random() * 0.055 - top;
+    return {
+      x,
+      top,
+      width: height * (0.105 + random() * 0.052),
+      height,
+      opacity: minimumOpacity + random() * (maximumOpacity - minimumOpacity),
+      variant: Math.floor(random() * 3),
+      rotation: (random() - 0.5) * 0.035,
+    };
+  });
+}
+
+function drawForestCanopyEdge(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  skyline: ReadonlyArray<ForestSkylinePoint>,
+  brushes: ReadonlyArray<HTMLCanvasElement>,
+  random: () => number,
+) {
+  const samples: Array<ForestSkylinePoint> = [];
+  for (let segment = 0; segment < skyline.length - 1; segment += 1) {
+    const start = skyline[segment];
+    const end = skyline[segment + 1];
+    const sampleCount = Math.max(3, Math.ceil((end[0] - start[0]) * 120));
+    for (let index = 0; index < sampleCount; index += 1) {
+      const mix = index / sampleCount;
+      const easedMix = mix * mix * (3 - 2 * mix);
+      const x = start[0] + (end[0] - start[0]) * mix;
+      const baseY = start[1] + (end[1] - start[1]) * easedMix;
+      const ripple = Math.sin(x * 79) * 0.007 + Math.sin(x * 191 + 1.7) * 0.004;
+      samples.push([x, baseY + ripple + (random() - 0.5) * 0.012]);
+    }
+  }
+  samples.push(skyline[skyline.length - 1]);
+
+  context.save();
+  const underlay = context.createLinearGradient(0, height * 0.18, 0, height);
+  underlay.addColorStop(0, 'rgba(255,255,255,0.12)');
+  underlay.addColorStop(0.55, 'rgba(255,255,255,0.2)');
+  underlay.addColorStop(1, 'rgba(255,255,255,0.14)');
+  context.fillStyle = underlay;
+  context.beginPath();
+  context.moveTo(samples[0][0] * width, samples[0][1] * height);
+  for (let index = 1; index < samples.length; index += 1) {
+    context.lineTo(samples[index][0] * width, samples[index][1] * height);
+  }
+  context.lineTo(width * 1.08, height * 1.04);
+  context.lineTo(width * -0.08, height * 1.04);
+  context.closePath();
+  context.fill();
+  context.restore();
+
+  for (let index = 0; index < samples.length;) {
+    const point = samples[index];
+    const x = point[0] * width;
+    const y = point[1] * height;
+    const clusterWidth = width * (0.032 + random() * 0.038);
+    const clusterHeight = height * (0.052 + random() * (point[0] < 0.3 ? 0.074 : 0.056));
+    const centerY = y + (random() - 0.5) * height * 0.052;
+    if (random() < 0.48) {
+      drawCanopyBranchSystem(
+        context,
+        x,
+        centerY,
+        clusterWidth,
+        clusterHeight,
+        random,
+      );
+    }
+    drawForestBrush(
+      context,
+      brushes[Math.floor(random() * brushes.length)],
+      x,
+      centerY,
+      clusterWidth,
+      clusterHeight,
+      (random() - 0.5) * 0.46,
+      0.38 + random() * 0.28,
+    );
+    const lobeCount = 4 + Math.floor(random() * 4);
+    for (let lobe = 0; lobe < lobeCount; lobe += 1) {
+      const angle = random() * TAU;
+      const distance = 0.22 + random() * 0.72;
+      drawForestBrush(
+        context,
+        brushes[Math.floor(random() * brushes.length)],
+        x + Math.cos(angle) * clusterWidth * distance * 0.42,
+        centerY + Math.sin(angle) * clusterHeight * distance * 0.34,
+        clusterWidth * (0.26 + random() * 0.4),
+        clusterHeight * (0.24 + random() * 0.38),
+        (random() - 0.5) * 0.58,
+        0.28 + random() * 0.3,
+      );
+    }
+    index += 1 + Math.floor(random() * 3);
+  }
+}
+
+function drawForestBrush(
+  context: CanvasRenderingContext2D,
+  brush: HTMLCanvasElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  rotation: number,
+  opacity: number,
+) {
+  context.save();
+  context.globalAlpha = opacity;
+  context.translate(x, y);
+  context.rotate(rotation);
+  context.drawImage(brush, -width * 0.5, -height * 0.5, width, height);
+  context.restore();
+}
+
+function drawForestFoliageField(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  brushes: ReadonlyArray<HTMLCanvasElement>,
+  zones: ReadonlyArray<ForestFoliageZone>,
+  random: () => number,
+) {
+  for (const zone of zones) {
+    const skylineCount = Math.max(18, Math.round(zone.count * 0.55));
+    for (let index = 0; index < skylineCount; index += 1) {
+      const mix = (index + 0.15 + random() * 0.7) / skylineCount;
+      const x = width * (zone.start + (zone.end - zone.start) * mix);
+      const top = height * (
+        zone.topStart
+        + (zone.topEnd - zone.topStart) * mix
+        + (random() - 0.5) * 0.035
+      );
+      const stampWidth = width * (
+        zone.minimumWidth * 0.82
+        + random() * (zone.maximumWidth - zone.minimumWidth) * 0.92
+      );
+      drawForestBrush(
+        context,
+        brushes[Math.floor(random() * brushes.length)],
+        x,
+        top,
+        stampWidth,
+        stampWidth * (0.72 + random() * 0.28),
+        (random() - 0.5) * 0.42,
+        0.64 + random() * 0.31,
+      );
+    }
+
+    for (let index = 0; index < zone.count; index += 1) {
+      const horizontalMix = random();
+      const top = zone.topStart + (zone.topEnd - zone.topStart) * horizontalMix;
+      const verticalMix = Math.pow(random(), 0.64);
+      const x = width * (zone.start + (zone.end - zone.start) * horizontalMix);
+      const y = height * (top + (zone.baseY - top) * verticalMix);
+      const stampWidth = width * (
+        zone.minimumWidth
+        + random() * (zone.maximumWidth - zone.minimumWidth)
+      ) * (0.78 + verticalMix * 0.38);
+      drawForestBrush(
+        context,
+        brushes[Math.floor(random() * brushes.length)],
+        x,
+        y,
+        stampWidth,
+        stampWidth * (0.62 + random() * 0.28),
+        (random() - 0.5) * 0.5,
+        0.28 + verticalMix * 0.46 + random() * 0.2,
+      );
+    }
+  }
+}
+
+function drawForestBushRows(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  brushes: ReadonlyArray<HTMLCanvasElement>,
+  random: () => number,
+  baseY: number,
+) {
+  const rowCount = 7;
+  for (let row = 0; row < rowCount; row += 1) {
+    const progress = row / (rowCount - 1);
+    const count = 56 + row * 6;
+    const rowY = baseY - 0.12 + progress * 0.43;
+    const rowOffset = row % 2 === 0 ? 0.18 : 0.68;
+    for (let index = 0; index < count; index += 1) {
+      const x = width * ((index + rowOffset + (random() - 0.5) * 0.56) / count);
+      const y = height * (
+        rowY
+        + Math.sin((index / count) * TAU * (2.2 + row * 0.17) + row) * 0.012
+        + (random() - 0.5) * 0.024
+      );
+      const stampWidth = width * (0.018 + progress * 0.013 + random() * 0.015);
+      drawForestBrush(
+        context,
+        brushes[Math.floor(random() * brushes.length)],
+        x,
+        y,
+        stampWidth,
+        stampWidth * (0.68 + random() * 0.34),
+        (random() - 0.5) * 0.42,
+        0.48 + progress * 0.16 + random() * 0.25,
+      );
+    }
+  }
+}
+
+function drawForestPines(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  brushes: ReadonlyArray<HTMLCanvasElement>,
+  anchors: ReadonlyArray<ForestPineAnchor>,
+) {
+  for (const anchor of anchors) {
+    const pineWidth = width * anchor.width;
+    const pineHeight = height * anchor.height;
+    const brush = brushes[anchor.variant % brushes.length];
+    context.save();
+    context.globalAlpha = anchor.opacity;
+    context.translate(width * anchor.x, height * anchor.top);
+    context.rotate(anchor.rotation ?? 0);
+    context.drawImage(brush, -pineWidth * 0.5, 0, pineWidth, pineHeight);
+    context.restore();
+  }
+}
+
+function colorForestMask(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  stops: ReadonlyArray<ForestPaletteStop>,
+) {
+  context.save();
+  context.globalCompositeOperation = 'source-in';
+  const gradient = context.createLinearGradient(0, 0, width, 0);
+  for (const stop of stops) gradient.addColorStop(stop.offset, rgba(stop.color, 1));
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+  context.restore();
+}
+
+function createForestLayer(
+  width: number,
+  height: number,
+  seed: number,
+  foliageBrushes: ReadonlyArray<HTMLCanvasElement>,
+  pineBrushes: ReadonlyArray<HTMLCanvasElement>,
+  zones: ReadonlyArray<ForestFoliageZone>,
+  pines: ReadonlyArray<ForestPineAnchor>,
+  palette: ReadonlyArray<ForestPaletteStop>,
+  baseY: number,
+  skyline: ReadonlyArray<ForestSkylinePoint>,
+) {
+  const canvas = createForestLayerCanvas(width, height);
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const random = createSeededRandom(seed);
+
+  drawForestCanopyEdge(context, width, height, skyline, foliageBrushes, random);
+  drawForestPines(context, width, height, pineBrushes, pines);
+  drawForestFoliageField(context, width, height, foliageBrushes, zones, random);
+  drawForestBushRows(context, width, height, foliageBrushes, random, baseY);
+
+  colorForestMask(context, width, height, palette);
+  return canvas;
+}
+
+function carveForestMist(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  radiusX: number,
+  radiusY: number,
+  strength: number,
+) {
+  context.save();
+  context.globalCompositeOperation = 'destination-out';
+  context.translate(width * x, height * y);
+  context.scale(1, height * radiusY / (width * radiusX));
+  const radius = width * radiusX;
+  const mist = context.createRadialGradient(0, 0, 0, 0, 0, radius);
+  mist.addColorStop(0, `rgba(0,0,0,${strength})`);
+  mist.addColorStop(0.42, `rgba(0,0,0,${strength * 0.72})`);
+  mist.addColorStop(0.78, `rgba(0,0,0,${strength * 0.2})`);
+  mist.addColorStop(1, 'rgba(0,0,0,0)');
+  context.fillStyle = mist;
+  context.fillRect(-radius, -radius, radius * 2, radius * 2);
+  context.restore();
+}
+
+function createForegroundTreesSprite() {
+  const width = 1800;
+  const height = 680;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const foliageBrushes = [1109, 2027, 4093, 6029].map(createFoliageBrush);
+  const pineBrushes = [3011, 5021, 7013].map(createPineBrush);
+  const mistPalette: ReadonlyArray<ForestPaletteStop> = [
+    { offset: 0, color: [116, 122, 118] },
+    { offset: 0.58, color: [142, 137, 128] },
+    { offset: 1, color: [207, 179, 142] },
+  ];
+  const backPalette: ReadonlyArray<ForestPaletteStop> = [
+    { offset: 0, color: FOREGROUND_TREE_BACK },
+    { offset: 0.58, color: [100, 99, 94] },
+    { offset: 1, color: [184, 154, 119] },
+  ];
+  const middlePalette: ReadonlyArray<ForestPaletteStop> = [
+    { offset: 0, color: [55, 59, 56] },
+    { offset: 0.56, color: [81, 76, 71] },
+    { offset: 1, color: [166, 132, 98] },
+  ];
+  const frontPalette: ReadonlyArray<ForestPaletteStop> = [
+    { offset: 0, color: FOREGROUND_TREE_BLACK },
+    { offset: 0.28, color: [54, 55, 51] },
+    { offset: 0.52, color: [85, 77, 73] },
+    { offset: 0.7, color: [128, 108, 95] },
+    { offset: 0.86, color: [179, 154, 125] },
+    { offset: 1, color: FOREGROUND_TREE_WARM_BLACK },
+  ];
+  const frontSkyline: ReadonlyArray<ForestSkylinePoint> = [
+    [-0.03, 0.21], [0.05, 0.18], [0.12, 0.21], [0.2, 0.29],
+    [0.25, 0.37], [0.29, 0.5], [0.32, 0.54], [0.37, 0.5],
+    [0.4, 0.45], [0.49, 0.43], [0.57, 0.42], [0.65, 0.37],
+    [0.73, 0.33], [0.8, 0.31], [0.88, 0.36], [0.96, 0.31],
+    [1.03, 0.35],
+  ];
+  const middleSkyline: ReadonlyArray<ForestSkylinePoint> = [
+    [-0.04, 0.19], [0.04, 0.15], [0.13, 0.2], [0.21, 0.27],
+    [0.28, 0.42], [0.35, 0.47], [0.41, 0.29], [0.48, 0.37],
+    [0.56, 0.34], [0.64, 0.3], [0.72, 0.25], [0.79, 0.28],
+    [0.87, 0.3], [0.94, 0.26], [1.04, 0.32],
+  ];
+  const backSkyline: ReadonlyArray<ForestSkylinePoint> = [
+    [-0.04, 0.14], [0.07, 0.18], [0.15, 0.22], [0.23, 0.3],
+    [0.3, 0.39], [0.38, 0.35], [0.45, 0.23], [0.52, 0.31],
+    [0.61, 0.26], [0.69, 0.22], [0.77, 0.2], [0.85, 0.27],
+    [0.93, 0.21], [1.04, 0.28],
+  ];
+  const mistSkyline: ReadonlyArray<ForestSkylinePoint> = [
+    [-0.05, 0.11], [0.05, 0.13], [0.13, 0.17], [0.2, 0.24],
+    [0.29, 0.34], [0.36, 0.3], [0.43, 0.19], [0.5, 0.27],
+    [0.58, 0.22], [0.67, 0.18], [0.75, 0.16], [0.83, 0.22],
+    [0.91, 0.17], [1.05, 0.24],
+  ];
+
+  const mistLayer = createForestLayer(
+    width,
+    height,
+    10037,
+    foliageBrushes,
+    pineBrushes,
+    [
+      { start: -0.06, end: 0.23, topStart: 0.13, topEnd: 0.28, baseY: 0.73, count: 58, minimumWidth: 0.008, maximumWidth: 0.022 },
+      { start: 0.2, end: 0.47, topStart: 0.28, topEnd: 0.24, baseY: 0.73, count: 48, minimumWidth: 0.008, maximumWidth: 0.021 },
+      { start: 0.43, end: 0.72, topStart: 0.24, topEnd: 0.2, baseY: 0.73, count: 52, minimumWidth: 0.008, maximumWidth: 0.021 },
+      { start: 0.68, end: 1.06, topStart: 0.2, topEnd: 0.27, baseY: 0.73, count: 66, minimumWidth: 0.008, maximumWidth: 0.022 },
+    ],
+    [
+      ...createPineForestBand(11213, 18, mistSkyline, 0.73, 0.3, 0.5),
+      { x: 0.12, top: 0.22, width: 0.035, height: 0.32, opacity: 0.52, variant: 1 },
+      { x: 0.36, top: 0.25, width: 0.032, height: 0.3, opacity: 0.48, variant: 2 },
+      { x: 0.69, top: 0.17, width: 0.04, height: 0.36, opacity: 0.54, variant: 0 },
+      { x: 0.91, top: 0.2, width: 0.037, height: 0.33, opacity: 0.48, variant: 2 },
+    ],
+    mistPalette,
+    0.73,
+    mistSkyline,
+  );
+  const mistLayerContext = mistLayer.getContext('2d');
+  if (mistLayerContext) {
+    carveForestMist(mistLayerContext, width, height, 0.2, 0.48, 0.07, 0.11, 0.16);
+    carveForestMist(mistLayerContext, width, height, 0.48, 0.44, 0.08, 0.12, 0.18);
+    carveForestMist(mistLayerContext, width, height, 0.79, 0.4, 0.09, 0.13, 0.16);
+  }
+
+  const backLayer = createForestLayer(
+    width,
+    height,
+    12289,
+    foliageBrushes,
+    pineBrushes,
+    [
+      { start: -0.05, end: 0.11, topStart: 0.18, topEnd: 0.2, baseY: 0.7, count: 80, minimumWidth: 0.012, maximumWidth: 0.035 },
+      { start: 0.07, end: 0.29, topStart: 0.2, topEnd: 0.42, baseY: 0.7, count: 92, minimumWidth: 0.011, maximumWidth: 0.032 },
+      { start: 0.39, end: 0.55, topStart: 0.27, topEnd: 0.4, baseY: 0.7, count: 58, minimumWidth: 0.01, maximumWidth: 0.029 },
+      { start: 0.51, end: 0.75, topStart: 0.39, topEnd: 0.29, baseY: 0.7, count: 70, minimumWidth: 0.01, maximumWidth: 0.028 },
+      { start: 0.7, end: 1.05, topStart: 0.28, topEnd: 0.34, baseY: 0.7, count: 104, minimumWidth: 0.01, maximumWidth: 0.03 },
+    ],
+    [
+      ...createPineForestBand(13159, 26, backSkyline, 0.72, 0.44, 0.7),
+      { x: 0.035, top: 0.18, width: 0.07, height: 0.49, opacity: 0.72, variant: 0 },
+      { x: 0.17, top: 0.27, width: 0.048, height: 0.39, opacity: 0.7, variant: 1 },
+      { x: 0.25, top: 0.3, width: 0.04, height: 0.35, opacity: 0.65, variant: 2 },
+      { x: 0.425, top: 0.15, width: 0.066, height: 0.54, opacity: 0.82, variant: 1 },
+      { x: 0.404, top: 0.29, width: 0.039, height: 0.37, opacity: 0.68, variant: 2 },
+      { x: 0.46, top: 0.31, width: 0.036, height: 0.34, opacity: 0.64, variant: 0 },
+      { x: 0.57, top: 0.35, width: 0.038, height: 0.31, opacity: 0.58, variant: 0 },
+      { x: 0.67, top: 0.29, width: 0.045, height: 0.37, opacity: 0.6, variant: 2 },
+      { x: 0.78, top: 0.24, width: 0.056, height: 0.43, opacity: 0.64, variant: 1 },
+      { x: 0.88, top: 0.28, width: 0.047, height: 0.38, opacity: 0.58, variant: 0 },
+      { x: 0.97, top: 0.26, width: 0.05, height: 0.4, opacity: 0.54, variant: 2 },
+    ],
+    backPalette,
+    0.72,
+    backSkyline,
+  );
+  const backLayerContext = backLayer.getContext('2d');
+  if (backLayerContext) {
+    carveForestMist(backLayerContext, width, height, 0.16, 0.5, 0.065, 0.1, 0.14);
+    carveForestMist(backLayerContext, width, height, 0.34, 0.48, 0.082, 0.13, 0.24);
+    carveForestMist(backLayerContext, width, height, 0.54, 0.47, 0.07, 0.11, 0.14);
+    carveForestMist(backLayerContext, width, height, 0.7, 0.39, 0.09, 0.12, 0.16);
+    carveForestMist(backLayerContext, width, height, 0.87, 0.45, 0.075, 0.11, 0.13);
+  }
+
+  const middleLayer = createForestLayer(
+    width,
+    height,
+    14731,
+    foliageBrushes,
+    pineBrushes,
+    [
+      { start: -0.06, end: 0.12, topStart: 0.14, topEnd: 0.18, baseY: 0.7, count: 104, minimumWidth: 0.011, maximumWidth: 0.032 },
+      { start: 0.08, end: 0.29, topStart: 0.18, topEnd: 0.4, baseY: 0.7, count: 112, minimumWidth: 0.01, maximumWidth: 0.03 },
+      { start: 0.39, end: 0.5, topStart: 0.24, topEnd: 0.42, baseY: 0.7, count: 52, minimumWidth: 0.009, maximumWidth: 0.027 },
+      { start: 0.47, end: 0.7, topStart: 0.42, topEnd: 0.31, baseY: 0.7, count: 86, minimumWidth: 0.009, maximumWidth: 0.027 },
+      { start: 0.68, end: 1.05, topStart: 0.26, topEnd: 0.32, baseY: 0.7, count: 122, minimumWidth: 0.009, maximumWidth: 0.029 },
+    ],
+    [
+      ...createPineForestBand(15233, 32, middleSkyline, 0.72, 0.54, 0.8),
+      { x: 0.08, top: 0.18, width: 0.064, height: 0.48, opacity: 0.84, variant: 2, rotation: -0.015 },
+      { x: 0.19, top: 0.26, width: 0.044, height: 0.4, opacity: 0.78, variant: 0 },
+      { x: 0.265, top: 0.3, width: 0.038, height: 0.36, opacity: 0.72, variant: 1 },
+      { x: 0.432, top: 0.11, width: 0.064, height: 0.57, opacity: 0.94, variant: 0, rotation: 0.012 },
+      { x: 0.405, top: 0.27, width: 0.042, height: 0.4, opacity: 0.8, variant: 2 },
+      { x: 0.462, top: 0.3, width: 0.038, height: 0.36, opacity: 0.76, variant: 1 },
+      { x: 0.615, top: 0.31, width: 0.04, height: 0.34, opacity: 0.68, variant: 2 },
+      { x: 0.755, top: 0.23, width: 0.054, height: 0.43, opacity: 0.76, variant: 1 },
+      { x: 0.855, top: 0.28, width: 0.046, height: 0.37, opacity: 0.66, variant: 2 },
+      { x: 0.945, top: 0.25, width: 0.052, height: 0.41, opacity: 0.6, variant: 0 },
+    ],
+    middlePalette,
+    0.72,
+    middleSkyline,
+  );
+  const middleLayerContext = middleLayer.getContext('2d');
+  if (middleLayerContext) {
+    carveForestMist(middleLayerContext, width, height, 0.17, 0.51, 0.06, 0.09, 0.1);
+    carveForestMist(middleLayerContext, width, height, 0.34, 0.5, 0.072, 0.12, 0.18);
+    carveForestMist(middleLayerContext, width, height, 0.56, 0.43, 0.055, 0.085, 0.1);
+    carveForestMist(middleLayerContext, width, height, 0.79, 0.45, 0.07, 0.1, 0.11);
+  }
+
+  const frontLayer = createForestLayer(
+    width,
+    height,
+    16411,
+    foliageBrushes,
+    pineBrushes,
+    [
+      { start: -0.07, end: 0.13, topStart: 0.11, topEnd: 0.17, baseY: 0.69, count: 124, minimumWidth: 0.01, maximumWidth: 0.03 },
+      { start: 0.08, end: 0.29, topStart: 0.17, topEnd: 0.39, baseY: 0.69, count: 126, minimumWidth: 0.009, maximumWidth: 0.028 },
+      { start: 0.395, end: 0.5, topStart: 0.26, topEnd: 0.43, baseY: 0.69, count: 52, minimumWidth: 0.009, maximumWidth: 0.026 },
+      { start: 0.47, end: 0.7, topStart: 0.43, topEnd: 0.3, baseY: 0.69, count: 92, minimumWidth: 0.008, maximumWidth: 0.026 },
+      { start: 0.68, end: 1.07, topStart: 0.25, topEnd: 0.32, baseY: 0.69, count: 138, minimumWidth: 0.008, maximumWidth: 0.028 },
+    ],
+    [
+      ...createPineForestBand(17029, 28, frontSkyline, 0.71, 0.62, 0.88),
+      { x: 0.045, top: 0.14, width: 0.07, height: 0.52, opacity: 0.9, variant: 1, rotation: -0.02 },
+      { x: 0.18, top: 0.26, width: 0.043, height: 0.39, opacity: 0.86, variant: 2 },
+      { x: 0.255, top: 0.29, width: 0.037, height: 0.36, opacity: 0.8, variant: 0 },
+      { x: 0.43, top: 0.1, width: 0.062, height: 0.58, opacity: 0.98, variant: 1, rotation: 0.01 },
+      { x: 0.405, top: 0.25, width: 0.044, height: 0.42, opacity: 0.88, variant: 0 },
+      { x: 0.463, top: 0.29, width: 0.039, height: 0.37, opacity: 0.84, variant: 2 },
+      { x: 0.58, top: 0.35, width: 0.038, height: 0.3, opacity: 0.76, variant: 0 },
+      { x: 0.66, top: 0.3, width: 0.044, height: 0.36, opacity: 0.78, variant: 2 },
+      { x: 0.77, top: 0.24, width: 0.055, height: 0.43, opacity: 0.82, variant: 0 },
+      { x: 0.86, top: 0.28, width: 0.047, height: 0.37, opacity: 0.72, variant: 1 },
+      { x: 0.96, top: 0.25, width: 0.052, height: 0.41, opacity: 0.66, variant: 2 },
+    ],
+    frontPalette,
+    0.71,
+    frontSkyline,
+  );
+  const frontLayerContext = frontLayer.getContext('2d');
+  if (frontLayerContext) {
+    carveForestMist(frontLayerContext, width, height, 0.16, 0.56, 0.055, 0.085, 0.08);
+    carveForestMist(frontLayerContext, width, height, 0.36, 0.55, 0.06, 0.09, 0.1);
+    carveForestMist(frontLayerContext, width, height, 0.59, 0.51, 0.06, 0.09, 0.09);
+    carveForestMist(frontLayerContext, width, height, 0.82, 0.52, 0.065, 0.095, 0.08);
+  }
+
+  context.save();
+  context.filter = 'blur(6px)';
+  context.globalAlpha = 0.26;
+  context.drawImage(mistLayer, 0, 0);
+  context.restore();
+
+  context.save();
+  context.filter = 'blur(4px)';
+  context.globalAlpha = 0.4;
+  context.drawImage(backLayer, 0, 0);
+  context.restore();
+
+  context.save();
+  context.filter = 'blur(1.7px)';
+  context.globalAlpha = 0.56;
+  context.drawImage(middleLayer, 0, 0);
+  context.restore();
+
+  context.save();
+  context.filter = 'blur(0.5px)';
+  context.globalAlpha = 0.8;
+  context.drawImage(frontLayer, 0, 0);
+  context.restore();
+
+  context.save();
+  context.globalCompositeOperation = 'source-atop';
+  const sunWash = context.createRadialGradient(
+    width * 1.03,
+    height * 0.28,
+    0,
+    width * 1.03,
+    height * 0.28,
+    width * 0.62,
+  );
+  sunWash.addColorStop(0, rgba([239, 188, 128], 0.34));
+  sunWash.addColorStop(0.48, rgba([213, 157, 109], 0.14));
+  sunWash.addColorStop(1, rgba([213, 157, 109], 0));
+  context.fillStyle = sunWash;
+  context.fillRect(0, 0, width, height);
+  context.restore();
+
+  context.save();
+  context.globalCompositeOperation = 'destination-in';
+  const sunlightFade = context.createLinearGradient(0, 0, width, 0);
+  sunlightFade.addColorStop(0, 'rgba(255,255,255,1)');
+  sunlightFade.addColorStop(0.54, 'rgba(255,255,255,0.98)');
+  sunlightFade.addColorStop(0.72, 'rgba(255,255,255,0.92)');
+  sunlightFade.addColorStop(0.86, 'rgba(255,255,255,0.82)');
+  sunlightFade.addColorStop(1, 'rgba(255,255,255,0.72)');
+  context.fillStyle = sunlightFade;
+  context.fillRect(0, 0, width, height);
+  context.restore();
+
+  return canvas;
+}
+
 function createAtmosphericSprites(): AtmosphericSprites {
   return {
     clouds: {
@@ -806,6 +1671,7 @@ function createAtmosphericSprites(): AtmosphericSprites {
       near: createDistantHillSprite('near'),
     },
     river: createRiverSprite(),
+    foregroundTrees: createForegroundTreesSprite(),
     sun: createSunSprite(),
   };
 }
@@ -971,6 +1837,23 @@ function createRiver(
   };
 }
 
+function createForegroundTrees(
+  width: number,
+  height: number,
+  compact: boolean,
+  sprite: HTMLCanvasElement,
+): ForegroundTreeLine {
+  return {
+    x: width * 0.5,
+    y: height * (compact ? 0.92 : 0.9),
+    width: width * (compact ? 1.38 : 1.22),
+    height: height * (compact ? 0.46 : 0.52),
+    depthProfile: LIGHT_DEPTH_PROFILES.foregroundTrees,
+    opacity: 0.7,
+    sprite,
+  };
+}
+
 function createParticles(width: number, height: number, compact: boolean) {
   const count = compact ? 26 : 48;
   const random = createSeededRandom(compact ? 8111 : 9011);
@@ -1023,6 +1906,7 @@ function createScene(
     haze: createHazeLayers(width, height, sprites),
     distantHills: createDistantHills(width, height, compact, sprites.distantHills),
     river: createRiver(width, height, compact, sprites.river),
+    foregroundTrees: createForegroundTrees(width, height, compact, sprites.foregroundTrees),
     particles: createParticles(width, height, compact),
     projection: { x: 0, y: 0, scale: 1, alphaScale: 1 },
   };
@@ -1335,6 +2219,25 @@ function drawRiver(
   );
 }
 
+function drawForegroundTrees(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  parallax: ParallaxFrame,
+) {
+  drawDepthImage(
+    context,
+    scene,
+    scene.foregroundTrees.sprite,
+    scene.foregroundTrees.x,
+    scene.foregroundTrees.y,
+    scene.foregroundTrees.width,
+    scene.foregroundTrees.height,
+    scene.foregroundTrees.depthProfile,
+    scene.foregroundTrees.opacity,
+    parallax,
+  );
+}
+
 function drawRiverGlow(
   context: CanvasRenderingContext2D,
   scene: AtmosphericScene,
@@ -1503,6 +2406,7 @@ function drawScene(
   drawHaze(context, scene, motionTime, 'near', parallax);
   drawClouds(context, scene, motionTime, 'foreground', parallax);
   drawEdgeGlow(context, scene, activeColor, parallax);
+  drawForegroundTrees(context, scene, parallax);
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
 }
