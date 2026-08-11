@@ -40,7 +40,15 @@ type AtmosphericSprites = {
   clouds: CloudSprites;
   cyanHaze: HTMLCanvasElement;
   lavenderHaze: HTMLCanvasElement;
+  distantHills: DistantHillSprites;
+  river: HTMLCanvasElement;
   sun: HTMLCanvasElement;
+};
+
+type DistantHillSprites = {
+  far: HTMLCanvasElement;
+  middle: HTMLCanvasElement;
+  near: HTMLCanvasElement;
 };
 
 type Cloud = {
@@ -68,6 +76,26 @@ type HazeLayer = {
   driftY: number;
   opacity: number;
   layer: HazeLayerKind;
+  sprite: HTMLCanvasElement;
+};
+
+type DistantHillLayer = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  depthProfile: AtmosphericDepthProfile;
+  opacity: number;
+  sprite: HTMLCanvasElement;
+};
+
+type RiverState = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  depthProfile: AtmosphericDepthProfile;
+  opacity: number;
   sprite: HTMLCanvasElement;
 };
 
@@ -119,6 +147,8 @@ type AtmosphericScene = {
   sun: SunState;
   clouds: Cloud[];
   haze: HazeLayer[];
+  distantHills: DistantHillLayer[];
+  river: RiverState;
   particles: AtmosphericParticle[];
   projection: DepthProjection;
 };
@@ -149,6 +179,10 @@ type CloudSpec = {
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const SKY_CYAN: Rgb = [114, 199, 232];
 const SKY_LAVENDER: Rgb = [178, 166, 226];
+const WARM_RIGHT_GLOW: Rgb = [255, 235, 196];
+const RIVER_SAGE: Rgb = [155, 166, 164];
+const RIVER_BLUE_GREY: Rgb = [155, 173, 173];
+const RIVER_REFLECTION: Rgb = [205, 214, 211];
 const WARM_PARTICLE: Rgb = [255, 244, 220];
 const COOL_PARTICLE: Rgb = [225, 246, 255];
 const SECTION_COLOR_DURATION_MS = 1200;
@@ -164,6 +198,8 @@ const DEGREE = Math.PI / 180;
 const LIGHT_DEPTH_PROFILES = {
   sun: { translation: 0.02, perspective: 0.02, tilt: 0.01 },
   farHaze: { translation: 0.05, perspective: 0.04, tilt: 0.03 },
+  distantHill: { translation: 0.065, perspective: 0.055, tilt: 0.04 },
+  river: { translation: 0.09, perspective: 0.075, tilt: 0.055 },
   farCloud: { translation: 0.2, perspective: 0.16, tilt: 0.14 },
   middleHaze: { translation: 0.32, perspective: 0.28, tilt: 0.24 },
   middleCloud: { translation: 0.45, perspective: 0.4, tilt: 0.36 },
@@ -444,6 +480,315 @@ function createSunSprite() {
   return canvas;
 }
 
+function createDistantHillSprite(kind: keyof DistantHillSprites) {
+  const width = 1200;
+  const height = 560;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+
+  const profiles: Record<keyof DistantHillSprites, {
+    masses: ReadonlyArray<{
+      ridge: ReadonlyArray<readonly [number, number]>;
+      opacity: number;
+      lift: number;
+      blurScale: number;
+    }>;
+    highlight: Rgb;
+    shadow: Rgb;
+    blur: number;
+    fadeStart: number;
+  }> = {
+    far: {
+      masses: [
+        {
+          ridge: [
+            [0.5, 0.96], [0.58, 0.8], [0.67, 0.64], [0.76, 0.56],
+            [0.84, 0.58], [0.93, 0.68], [1.02, 0.83], [1.1, 0.96],
+          ],
+          opacity: 0.26,
+          lift: 0.52,
+          blurScale: 1.35,
+        },
+        {
+          ridge: [
+            [0.13, 0.96], [0.22, 0.76], [0.31, 0.61], [0.4, 0.53],
+            [0.49, 0.55], [0.59, 0.64], [0.69, 0.77], [0.79, 0.91],
+            [0.87, 0.97],
+          ],
+          opacity: 0.54,
+          lift: 0.28,
+          blurScale: 1.18,
+        },
+        {
+          ridge: [
+            [-0.154, 0.97], [-0.084, 0.57], [-0.004, 0.27], [0.076, 0.15],
+            [0.156, 0.17], [0.246, 0.25], [0.336, 0.41], [0.426, 0.6],
+            [0.526, 0.78], [0.626, 0.95], [0.716, 1.04],
+          ],
+          opacity: 1,
+          lift: 0,
+          blurScale: 1,
+        },
+      ],
+      highlight: [137, 138, 147],
+      shadow: [96, 105, 118],
+      blur: 12,
+      fadeStart: 0.58,
+    },
+    middle: {
+      masses: [
+        {
+          ridge: [
+            [0.57, 0.97], [0.65, 0.76], [0.74, 0.6], [0.83, 0.56],
+            [0.92, 0.64], [1.01, 0.79], [1.09, 0.96],
+          ],
+          opacity: 0.23,
+          lift: 0.56,
+          blurScale: 1.3,
+        },
+        {
+          ridge: [
+            [0.23, 0.97], [0.31, 0.71], [0.4, 0.52], [0.49, 0.45],
+            [0.58, 0.49], [0.67, 0.62], [0.76, 0.8], [0.85, 0.96],
+          ],
+          opacity: 0.56,
+          lift: 0.3,
+          blurScale: 1.15,
+        },
+        {
+          ridge: [
+            [-0.1, 0.94], [-0.02, 0.59], [0.07, 0.36], [0.15, 0.28],
+            [0.24, 0.32], [0.33, 0.44], [0.42, 0.62], [0.52, 0.8],
+            [0.62, 0.96],
+          ],
+          opacity: 0.9,
+          lift: 0.08,
+          blurScale: 1,
+        },
+      ],
+      highlight: [160, 160, 168],
+      shadow: [100, 112, 125],
+      blur: 8,
+      fadeStart: 0.66,
+    },
+    near: {
+      masses: [
+        {
+          ridge: [
+            [0.62, 0.97], [0.7, 0.77], [0.78, 0.62], [0.86, 0.59],
+            [0.94, 0.68], [1.02, 0.82], [1.09, 0.97],
+          ],
+          opacity: 0.2,
+          lift: 0.58,
+          blurScale: 1.28,
+        },
+        {
+          ridge: [
+            [0.24, 0.97], [0.32, 0.7], [0.41, 0.53], [0.5, 0.47],
+            [0.59, 0.52], [0.68, 0.66], [0.77, 0.83], [0.86, 0.97],
+          ],
+          opacity: 0.5,
+          lift: 0.32,
+          blurScale: 1.12,
+        },
+        {
+          ridge: [
+            [-0.1, 0.96], [-0.02, 0.67], [0.06, 0.47], [0.14, 0.39],
+            [0.22, 0.43], [0.31, 0.56], [0.4, 0.72], [0.5, 0.88],
+            [0.59, 0.97],
+          ],
+          opacity: 0.84,
+          lift: 0.1,
+          blurScale: 1,
+        },
+      ],
+      highlight: [145, 147, 155],
+      shadow: [84, 98, 111],
+      blur: 6,
+      fadeStart: 0.74,
+    },
+  };
+  const profile = profiles[kind];
+
+  for (const mass of profile.masses) {
+    context.save();
+    context.globalAlpha = mass.opacity;
+    context.filter = `blur(${profile.blur * mass.blurScale}px)`;
+    context.beginPath();
+    const first = mass.ridge[0];
+    context.moveTo(first[0] * width, height + profile.blur * 2);
+    context.lineTo(first[0] * width, first[1] * height);
+    for (let index = 1; index < mass.ridge.length - 1; index += 1) {
+      const point = mass.ridge[index];
+      const next = mass.ridge[index + 1];
+      context.quadraticCurveTo(
+        point[0] * width,
+        point[1] * height,
+        (point[0] + next[0]) * width * 0.5,
+        (point[1] + next[1]) * height * 0.5,
+      );
+    }
+    const last = mass.ridge[mass.ridge.length - 1];
+    context.lineTo(last[0] * width, last[1] * height);
+    context.lineTo(last[0] * width, height + profile.blur * 2);
+    context.closePath();
+    const highlight = mixRgb(profile.highlight, [247, 247, 249], mass.lift);
+    const shadow = mixRgb(profile.shadow, [225, 226, 231], mass.lift);
+    const fill = context.createLinearGradient(0, height * 0.12, 0, height);
+    fill.addColorStop(0, rgba(highlight, 0.72));
+    fill.addColorStop(0.48, rgba(mixRgb(highlight, shadow, 0.58), 0.9));
+    fill.addColorStop(1, rgba(shadow, 0.96));
+    context.fillStyle = fill;
+    context.fill();
+    context.restore();
+  }
+
+  context.save();
+  context.globalCompositeOperation = 'source-atop';
+  context.filter = `blur(${profile.blur * 2}px)`;
+  const random = createSeededRandom(kind === 'far' ? 8573 : kind === 'middle' ? 9257 : 10103);
+  for (let index = 0; index < 5; index += 1) {
+    const x = width * (0.12 + random() * 0.58);
+    const y = height * (0.4 + random() * 0.36);
+    const radius = width * (0.12 + random() * 0.1);
+    const mist = context.createRadialGradient(x, y, 0, x, y, radius);
+    mist.addColorStop(0, 'rgba(247,248,252,0.2)');
+    mist.addColorStop(1, 'rgba(247,248,252,0)');
+    context.fillStyle = mist;
+    context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+  context.restore();
+
+  context.save();
+  context.globalCompositeOperation = 'destination-in';
+  const rightFade = context.createLinearGradient(0, 0, width, 0);
+  rightFade.addColorStop(0, 'rgba(255,255,255,1)');
+  rightFade.addColorStop(profile.fadeStart, 'rgba(255,255,255,0.98)');
+  rightFade.addColorStop(0.86, 'rgba(255,255,255,0.28)');
+  rightFade.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = rightFade;
+  context.fillRect(0, 0, width, height);
+  context.restore();
+  return canvas;
+}
+
+function createRiverSprite() {
+  const width = 720;
+  const height = 620;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+
+  context.save();
+  context.filter = 'blur(8px)';
+  context.beginPath();
+  context.moveTo(width * 0.72, height * 0.04);
+  context.bezierCurveTo(
+    width * 0.69,
+    height * 0.2,
+    width * 0.63,
+    height * 0.35,
+    width * 0.56,
+    height * 0.45,
+  );
+  context.bezierCurveTo(
+    width * 0.47,
+    height * 0.58,
+    width * 0.32,
+    height * 0.76,
+    width * 0.12,
+    height * 1.04,
+  );
+  context.lineTo(width * 0.52, height * 1.04);
+  context.bezierCurveTo(
+    width * 0.58,
+    height * 0.84,
+    width * 0.64,
+    height * 0.7,
+    width * 0.66,
+    height * 0.55,
+  );
+  context.bezierCurveTo(
+    width * 0.68,
+    height * 0.38,
+    width * 0.76,
+    height * 0.2,
+    width * 0.78,
+    height * 0.04,
+  );
+  context.closePath();
+  const river = context.createLinearGradient(0, 0, width * 0.1, height);
+  river.addColorStop(0, rgba(RIVER_REFLECTION, 0.5));
+  river.addColorStop(0.38, rgba(RIVER_BLUE_GREY, 0.78));
+  river.addColorStop(1, rgba(RIVER_SAGE, 0.68));
+  context.fillStyle = river;
+  context.fill();
+  context.restore();
+
+  context.save();
+  context.filter = 'blur(3px)';
+  context.beginPath();
+  context.moveTo(width * 0.745, height * 0.055);
+  context.bezierCurveTo(
+    width * 0.71,
+    height * 0.24,
+    width * 0.64,
+    height * 0.4,
+    width * 0.59,
+    height * 0.5,
+  );
+  context.bezierCurveTo(
+    width * 0.51,
+    height * 0.64,
+    width * 0.4,
+    height * 0.8,
+    width * 0.27,
+    height * 1.03,
+  );
+  context.lineTo(width * 0.42, height * 1.03);
+  context.bezierCurveTo(
+    width * 0.48,
+    height * 0.84,
+    width * 0.57,
+    height * 0.66,
+    width * 0.62,
+    height * 0.54,
+  );
+  context.bezierCurveTo(
+    width * 0.67,
+    height * 0.4,
+    width * 0.74,
+    height * 0.22,
+    width * 0.765,
+    height * 0.055,
+  );
+  context.closePath();
+  const reflection = context.createLinearGradient(0, 0, width * 0.12, height);
+  reflection.addColorStop(0, rgba(RIVER_REFLECTION, 0.48));
+  reflection.addColorStop(0.48, rgba(RIVER_BLUE_GREY, 0.34));
+  reflection.addColorStop(1, rgba(RIVER_REFLECTION, 0.12));
+  context.fillStyle = reflection;
+  context.fill();
+  context.restore();
+
+  context.save();
+  context.globalCompositeOperation = 'destination-in';
+  const fade = context.createLinearGradient(0, 0, 0, height);
+  fade.addColorStop(0, 'rgba(255,255,255,0)');
+  fade.addColorStop(0.08, 'rgba(255,255,255,0.82)');
+  fade.addColorStop(0.22, 'rgba(255,255,255,1)');
+  fade.addColorStop(1, 'rgba(255,255,255,1)');
+  context.fillStyle = fade;
+  context.fillRect(0, 0, width, height);
+  context.restore();
+  return canvas;
+}
+
 function createAtmosphericSprites(): AtmosphericSprites {
   return {
     clouds: {
@@ -455,6 +800,12 @@ function createAtmosphericSprites(): AtmosphericSprites {
     },
     cyanHaze: createHazeSprite(SKY_CYAN, 6311),
     lavenderHaze: createHazeSprite(SKY_LAVENDER, 7411),
+    distantHills: {
+      far: createDistantHillSprite('far'),
+      middle: createDistantHillSprite('middle'),
+      near: createDistantHillSprite('near'),
+    },
+    river: createRiverSprite(),
     sun: createSunSprite(),
   };
 }
@@ -561,6 +912,65 @@ function createHazeLayers(
   ];
 }
 
+function createDistantHills(
+  width: number,
+  height: number,
+  compact: boolean,
+  sprites: DistantHillSprites,
+): DistantHillLayer[] {
+  const hillWidth = Math.max(
+    width * (compact ? 1.72 : 1.3),
+    height * (compact ? 0.94 : 1.12),
+  );
+  const centerX = width * (compact ? 0.82 : 0.58);
+  return [
+    {
+      x: centerX,
+      y: height * (compact ? 0.64 : 0.6),
+      width: hillWidth,
+      height: height * (compact ? 0.7 : 0.8),
+      depthProfile: LIGHT_DEPTH_PROFILES.distantHill,
+      opacity: 0.43,
+      sprite: sprites.far,
+    },
+    {
+      x: centerX - width * 0.015,
+      y: height * (compact ? 0.67 : 0.64),
+      width: hillWidth * 1.02,
+      height: height * (compact ? 0.62 : 0.7),
+      depthProfile: LIGHT_DEPTH_PROFILES.distantHill,
+      opacity: 0.24,
+      sprite: sprites.middle,
+    },
+    {
+      x: centerX - width * 0.035,
+      y: height * (compact ? 0.7 : 0.68),
+      width: hillWidth * 1.04,
+      height: height * (compact ? 0.58 : 0.62),
+      depthProfile: LIGHT_DEPTH_PROFILES.distantHill,
+      opacity: 0.26,
+      sprite: sprites.near,
+    },
+  ];
+}
+
+function createRiver(
+  width: number,
+  height: number,
+  compact: boolean,
+  sprite: HTMLCanvasElement,
+): RiverState {
+  return {
+    x: width * (compact ? 0.35 : 0.335),
+    y: height * (compact ? 0.86 : 0.855),
+    width: width * (compact ? 0.55 : 0.42),
+    height: height * (compact ? 0.28 : 0.33),
+    depthProfile: LIGHT_DEPTH_PROFILES.river,
+    opacity: compact ? 0.44 : 0.48,
+    sprite,
+  };
+}
+
 function createParticles(width: number, height: number, compact: boolean) {
   const count = compact ? 26 : 48;
   const random = createSeededRandom(compact ? 8111 : 9011);
@@ -611,6 +1021,8 @@ function createScene(
     },
     clouds: createClouds(width, height, compact, sprites.clouds),
     haze: createHazeLayers(width, height, sprites),
+    distantHills: createDistantHills(width, height, compact, sprites.distantHills),
+    river: createRiver(width, height, compact, sprites.river),
     particles: createParticles(width, height, compact),
     projection: { x: 0, y: 0, scale: 1, alphaScale: 1 },
   };
@@ -750,6 +1162,47 @@ function drawAtmosphericWash(
   parallax: ParallaxFrame,
 ) {
   const shortSide = Math.min(scene.width, scene.height);
+  const rightGlowColor = mixRgb(
+    mixRgb(WARM_RIGHT_GLOW, activeColor, 0.4),
+    [255, 255, 255],
+    0.35,
+  );
+  const rightGlowX = scene.width * 1.02
+    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  const rightGlowY = scene.height * 0.38
+    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  const rightGlowRadius = Math.max(scene.width * 0.6, scene.height * 0.72);
+  const rightGlow = context.createRadialGradient(
+    rightGlowX,
+    rightGlowY,
+    0,
+    rightGlowX,
+    rightGlowY,
+    rightGlowRadius,
+  );
+  rightGlow.addColorStop(0, rgba(rightGlowColor, 0.11));
+  rightGlow.addColorStop(0.5, rgba(rightGlowColor, 0.045));
+  rightGlow.addColorStop(1, rgba(rightGlowColor, 0));
+  context.fillStyle = rightGlow;
+  context.fillRect(0, 0, scene.width, scene.height);
+
+  const lowerRightX = scene.width * 0.98
+    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  const lowerRightY = scene.height * 0.94
+    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  const lowerRight = context.createRadialGradient(
+    lowerRightX,
+    lowerRightY,
+    0,
+    lowerRightX,
+    lowerRightY,
+    shortSide * 0.76,
+  );
+  lowerRight.addColorStop(0, rgba(rightGlowColor, 0.052));
+  lowerRight.addColorStop(1, rgba(rightGlowColor, 0));
+  context.fillStyle = lowerRight;
+  context.fillRect(0, 0, scene.width, scene.height);
+
   const accentX = scene.width * 0.08
     + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.middleHaze.translation);
   const accentY = scene.height * 0.69
@@ -840,6 +1293,73 @@ function drawHaze(
       parallax,
     );
   }
+}
+
+function drawDistantHills(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  parallax: ParallaxFrame,
+) {
+  for (const hill of scene.distantHills) {
+    drawDepthImage(
+      context,
+      scene,
+      hill.sprite,
+      hill.x,
+      hill.y,
+      hill.width,
+      hill.height,
+      hill.depthProfile,
+      hill.opacity,
+      parallax,
+    );
+  }
+}
+
+function drawRiver(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  parallax: ParallaxFrame,
+) {
+  drawDepthImage(
+    context,
+    scene,
+    scene.river.sprite,
+    scene.river.x,
+    scene.river.y,
+    scene.river.width,
+    scene.river.height,
+    scene.river.depthProfile,
+    scene.river.opacity,
+    parallax,
+  );
+}
+
+function drawRiverGlow(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  parallax: ParallaxFrame,
+) {
+  projectAtDepth(
+    parallax,
+    scene.width * 0.66,
+    scene.height * 0.81,
+    LIGHT_DEPTH_PROFILES.river,
+    scene.projection,
+  );
+  const radius = Math.min(scene.width, scene.height) * 0.4;
+  context.save();
+  context.translate(scene.projection.x, scene.projection.y);
+  context.scale(scene.compact ? 2.2 : 3.25, scene.compact ? 0.85 : 0.72);
+  const riverGlowColor = mixRgb(RIVER_BLUE_GREY, SKY_CYAN, 0.72);
+  const glow = context.createRadialGradient(0, 0, 0, 0, 0, radius);
+  glow.addColorStop(0, rgba(riverGlowColor, 0.32 * scene.projection.alphaScale));
+  glow.addColorStop(0.46, rgba(riverGlowColor, 0.16 * scene.projection.alphaScale));
+  glow.addColorStop(0.78, rgba(riverGlowColor, 0.055 * scene.projection.alphaScale));
+  glow.addColorStop(1, rgba(riverGlowColor, 0));
+  context.fillStyle = glow;
+  context.fillRect(-radius, -radius, radius * 2, radius * 2);
+  context.restore();
 }
 
 function getCloudX(scene: AtmosphericScene, cloud: Cloud, time: number) {
@@ -974,7 +1494,10 @@ function drawScene(
   drawSun(context, scene, sprites, activeColor, parallax);
   drawHaze(context, scene, motionTime, 'far', parallax);
   drawClouds(context, scene, motionTime, 'far', parallax);
+  drawDistantHills(context, scene, parallax);
+  drawRiver(context, scene, parallax);
   drawHaze(context, scene, motionTime, 'middle', parallax);
+  drawRiverGlow(context, scene, parallax);
   drawClouds(context, scene, motionTime, 'middle', parallax);
   drawParticles(context, scene, motionTime, activeColor, parallax);
   drawHaze(context, scene, motionTime, 'near', parallax);
