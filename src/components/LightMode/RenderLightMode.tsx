@@ -39,9 +39,9 @@ type CloudSprites = {
 type AtmosphericSprites = {
   clouds: CloudSprites;
   cyanHaze: HTMLCanvasElement;
+  foregroundCyanHaze: HTMLCanvasElement;
   lavenderHaze: HTMLCanvasElement;
   distantHills: DistantHillSprites;
-  river: HTMLCanvasElement;
   foregroundTrees: HTMLCanvasElement;
   sun: HTMLCanvasElement;
 };
@@ -90,16 +90,6 @@ type DistantHillLayer = {
   sprite: HTMLCanvasElement;
 };
 
-type RiverState = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  depthProfile: AtmosphericDepthProfile;
-  opacity: number;
-  sprite: HTMLCanvasElement;
-};
-
 type ForegroundTreeLine = {
   x: number;
   y: number;
@@ -109,6 +99,13 @@ type ForegroundTreeLine = {
   opacity: number;
   sprite: HTMLCanvasElement;
 };
+
+type RiverGlowLobe = Readonly<{
+  centerX: number;
+  halfWidth: number;
+  halfHeight: number;
+  opacity: number;
+}>;
 
 type AtmosphericParticle = {
   x: number;
@@ -159,7 +156,6 @@ type AtmosphericScene = {
   clouds: Cloud[];
   haze: HazeLayer[];
   distantHills: DistantHillLayer[];
-  river: RiverState;
   foregroundTrees: ForegroundTreeLine;
   particles: AtmosphericParticle[];
   projection: DepthProjection;
@@ -190,11 +186,10 @@ type CloudSpec = {
 
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const SKY_CYAN: Rgb = [114, 199, 232];
+const FOREGROUND_FOG_CYAN: Rgb = [92, 196, 238];
 const SKY_LAVENDER: Rgb = [178, 166, 226];
 const WARM_RIGHT_GLOW: Rgb = [255, 235, 196];
-const RIVER_SAGE: Rgb = [155, 166, 164];
-const RIVER_BLUE_GREY: Rgb = [155, 173, 173];
-const RIVER_REFLECTION: Rgb = [205, 214, 211];
+const RIVER_LIGHT_BLUE: Rgb = [157, 205, 214];
 const FOREGROUND_TREE_BLACK: Rgb = [46, 48, 46];
 const FOREGROUND_TREE_WARM_BLACK: Rgb = [209, 179, 141];
 const FOREGROUND_TREE_BACK: Rgb = [85, 89, 85];
@@ -208,13 +203,20 @@ const DEVICE_TILT_RANGE_Y = 22;
 const TAU = Math.PI * 2;
 const DEGREE = Math.PI / 180;
 
+const DESKTOP_RIVER_GLOW_LOBES: ReadonlyArray<RiverGlowLobe> = [
+  { centerX: 0.43, halfWidth: 0.38, halfHeight: 0.05, opacity: 1 },
+];
+const COMPACT_RIVER_GLOW_LOBES: ReadonlyArray<RiverGlowLobe> = [
+  { centerX: 0.47, halfWidth: 0.44, halfHeight: 0.055, opacity: 1 },
+];
+
 // Each normalized response is independent: 0 stays anchored and 1 receives
 // the light camera's full translation, cursor-weighted scale, or plane tilt.
 const LIGHT_DEPTH_PROFILES = {
   sun: { translation: 0.02, perspective: 0.02, tilt: 0.01 },
   farHaze: { translation: 0.05, perspective: 0.04, tilt: 0.03 },
   distantHill: { translation: 0.065, perspective: 0.055, tilt: 0.04 },
-  river: { translation: 0.09, perspective: 0.075, tilt: 0.055 },
+  riverGlow: { translation: 0.025, perspective: 0.02, tilt: 0 },
   farCloud: { translation: 0.2, perspective: 0.16, tilt: 0.14 },
   middleHaze: { translation: 0.32, perspective: 0.28, tilt: 0.24 },
   middleCloud: { translation: 0.45, perspective: 0.4, tilt: 0.36 },
@@ -686,120 +688,6 @@ function createDistantHillSprite(kind: keyof DistantHillSprites) {
   rightFade.addColorStop(0.86, 'rgba(255,255,255,0.28)');
   rightFade.addColorStop(1, 'rgba(255,255,255,0)');
   context.fillStyle = rightFade;
-  context.fillRect(0, 0, width, height);
-  context.restore();
-  return canvas;
-}
-
-function createRiverSprite() {
-  const width = 720;
-  const height = 620;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) return canvas;
-
-  context.save();
-  context.filter = 'blur(8px)';
-  context.beginPath();
-  context.moveTo(width * 0.72, height * 0.04);
-  context.bezierCurveTo(
-    width * 0.69,
-    height * 0.2,
-    width * 0.63,
-    height * 0.35,
-    width * 0.56,
-    height * 0.45,
-  );
-  context.bezierCurveTo(
-    width * 0.47,
-    height * 0.58,
-    width * 0.32,
-    height * 0.76,
-    width * 0.12,
-    height * 1.04,
-  );
-  context.lineTo(width * 0.52, height * 1.04);
-  context.bezierCurveTo(
-    width * 0.58,
-    height * 0.84,
-    width * 0.64,
-    height * 0.7,
-    width * 0.66,
-    height * 0.55,
-  );
-  context.bezierCurveTo(
-    width * 0.68,
-    height * 0.38,
-    width * 0.76,
-    height * 0.2,
-    width * 0.78,
-    height * 0.04,
-  );
-  context.closePath();
-  const river = context.createLinearGradient(0, 0, width * 0.1, height);
-  river.addColorStop(0, rgba(RIVER_REFLECTION, 0.5));
-  river.addColorStop(0.38, rgba(RIVER_BLUE_GREY, 0.78));
-  river.addColorStop(1, rgba(RIVER_SAGE, 0.68));
-  context.fillStyle = river;
-  context.fill();
-  context.restore();
-
-  context.save();
-  context.filter = 'blur(3px)';
-  context.beginPath();
-  context.moveTo(width * 0.745, height * 0.055);
-  context.bezierCurveTo(
-    width * 0.71,
-    height * 0.24,
-    width * 0.64,
-    height * 0.4,
-    width * 0.59,
-    height * 0.5,
-  );
-  context.bezierCurveTo(
-    width * 0.51,
-    height * 0.64,
-    width * 0.4,
-    height * 0.8,
-    width * 0.27,
-    height * 1.03,
-  );
-  context.lineTo(width * 0.42, height * 1.03);
-  context.bezierCurveTo(
-    width * 0.48,
-    height * 0.84,
-    width * 0.57,
-    height * 0.66,
-    width * 0.62,
-    height * 0.54,
-  );
-  context.bezierCurveTo(
-    width * 0.67,
-    height * 0.4,
-    width * 0.74,
-    height * 0.22,
-    width * 0.765,
-    height * 0.055,
-  );
-  context.closePath();
-  const reflection = context.createLinearGradient(0, 0, width * 0.12, height);
-  reflection.addColorStop(0, rgba(RIVER_REFLECTION, 0.48));
-  reflection.addColorStop(0.48, rgba(RIVER_BLUE_GREY, 0.34));
-  reflection.addColorStop(1, rgba(RIVER_REFLECTION, 0.12));
-  context.fillStyle = reflection;
-  context.fill();
-  context.restore();
-
-  context.save();
-  context.globalCompositeOperation = 'destination-in';
-  const fade = context.createLinearGradient(0, 0, 0, height);
-  fade.addColorStop(0, 'rgba(255,255,255,0)');
-  fade.addColorStop(0.08, 'rgba(255,255,255,0.82)');
-  fade.addColorStop(0.22, 'rgba(255,255,255,1)');
-  fade.addColorStop(1, 'rgba(255,255,255,1)');
-  context.fillStyle = fade;
   context.fillRect(0, 0, width, height);
   context.restore();
   return canvas;
@@ -1654,13 +1542,13 @@ function createAtmosphericSprites(): AtmosphericSprites {
       foreground: createCloudSprite('foreground', 5279),
     },
     cyanHaze: createHazeSprite(SKY_CYAN, 6311),
+    foregroundCyanHaze: createHazeSprite(FOREGROUND_FOG_CYAN, 6311),
     lavenderHaze: createHazeSprite(SKY_LAVENDER, 7411),
     distantHills: {
       far: createDistantHillSprite('far'),
       middle: createDistantHillSprite('middle'),
       near: createDistantHillSprite('near'),
     },
-    river: createRiverSprite(),
     foregroundTrees: createForegroundTreesSprite(),
     sun: createSunSprite(),
   };
@@ -1763,7 +1651,20 @@ function createHazeLayers(
       driftY: height * 0.017,
       opacity: 0.3,
       layer: 'near',
-      sprite: sprites.cyanHaze,
+      sprite: sprites.foregroundCyanHaze,
+    },
+    {
+      x: width * 0.42,
+      y: height * 0.87,
+      width: Math.max(width * 0.54, shortSide * 0.72),
+      height: Math.max(height * 0.38, shortSide * 0.44),
+      depthProfile: LIGHT_DEPTH_PROFILES.nearHaze,
+      phase: 5.9,
+      driftX: width * 0.016,
+      driftY: height * 0.013,
+      opacity: 0.2,
+      layer: 'near',
+      sprite: sprites.foregroundCyanHaze,
     },
   ];
 }
@@ -1808,23 +1709,6 @@ function createDistantHills(
       sprite: sprites.near,
     },
   ];
-}
-
-function createRiver(
-  width: number,
-  height: number,
-  compact: boolean,
-  sprite: HTMLCanvasElement,
-): RiverState {
-  return {
-    x: width * (compact ? 0.35 : 0.335),
-    y: height * (compact ? 0.86 : 0.855),
-    width: width * (compact ? 0.55 : 0.42),
-    height: height * (compact ? 0.28 : 0.33),
-    depthProfile: LIGHT_DEPTH_PROFILES.river,
-    opacity: compact ? 0.44 : 0.48,
-    sprite,
-  };
 }
 
 function createForegroundTrees(
@@ -1895,7 +1779,6 @@ function createScene(
     clouds: createClouds(width, height, compact, sprites.clouds),
     haze: createHazeLayers(width, height, sprites),
     distantHills: createDistantHills(width, height, compact, sprites.distantHills),
-    river: createRiver(width, height, compact, sprites.river),
     foregroundTrees: createForegroundTrees(width, height, compact, sprites.foregroundTrees),
     particles: createParticles(width, height, compact),
     projection: { x: 0, y: 0, scale: 1, alphaScale: 1 },
@@ -2190,25 +2073,6 @@ function drawDistantHills(
   }
 }
 
-function drawRiver(
-  context: CanvasRenderingContext2D,
-  scene: AtmosphericScene,
-  parallax: ParallaxFrame,
-) {
-  drawDepthImage(
-    context,
-    scene,
-    scene.river.sprite,
-    scene.river.x,
-    scene.river.y,
-    scene.river.width,
-    scene.river.height,
-    scene.river.depthProfile,
-    scene.river.opacity,
-    parallax,
-  );
-}
-
 function drawForegroundTrees(
   context: CanvasRenderingContext2D,
   scene: AtmosphericScene,
@@ -2233,26 +2097,41 @@ function drawRiverGlow(
   scene: AtmosphericScene,
   parallax: ParallaxFrame,
 ) {
-  projectAtDepth(
-    parallax,
-    scene.width * 0.66,
-    scene.height * 0.81,
-    LIGHT_DEPTH_PROFILES.river,
-    scene.projection,
-  );
-  const radius = Math.min(scene.width, scene.height) * 0.4;
-  context.save();
-  context.translate(scene.projection.x, scene.projection.y);
-  context.scale(scene.compact ? 2.2 : 3.25, scene.compact ? 0.85 : 0.72);
-  const riverGlowColor = mixRgb(RIVER_BLUE_GREY, SKY_CYAN, 0.72);
-  const glow = context.createRadialGradient(0, 0, 0, 0, 0, radius);
-  glow.addColorStop(0, rgba(riverGlowColor, 0.32 * scene.projection.alphaScale));
-  glow.addColorStop(0.46, rgba(riverGlowColor, 0.16 * scene.projection.alphaScale));
-  glow.addColorStop(0.78, rgba(riverGlowColor, 0.055 * scene.projection.alphaScale));
-  glow.addColorStop(1, rgba(riverGlowColor, 0));
-  context.fillStyle = glow;
-  context.fillRect(-radius, -radius, radius * 2, radius * 2);
-  context.restore();
+  const centerY = scene.height * (scene.compact ? 0.92 : 0.91);
+  const riverGlowColor = mixRgb(RIVER_LIGHT_BLUE, SKY_CYAN, 0.58);
+  const lobes = scene.compact
+    ? COMPACT_RIVER_GLOW_LOBES
+    : DESKTOP_RIVER_GLOW_LOBES;
+
+  for (const lobe of lobes) {
+    projectAtDepth(
+      parallax,
+      scene.width * lobe.centerX,
+      centerY,
+      LIGHT_DEPTH_PROFILES.riverGlow,
+      scene.projection,
+    );
+    context.save();
+    context.translate(scene.projection.x, scene.projection.y);
+    context.scale(scene.width * lobe.halfWidth, scene.height * lobe.halfHeight);
+    const glow = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+    glow.addColorStop(
+      0,
+      rgba(riverGlowColor, 0.36 * lobe.opacity * scene.projection.alphaScale),
+    );
+    glow.addColorStop(
+      0.42,
+      rgba(riverGlowColor, 0.18 * lobe.opacity * scene.projection.alphaScale),
+    );
+    glow.addColorStop(
+      0.76,
+      rgba(riverGlowColor, 0.05 * lobe.opacity * scene.projection.alphaScale),
+    );
+    glow.addColorStop(1, rgba(riverGlowColor, 0));
+    context.fillStyle = glow;
+    context.fillRect(-1, -1, 2, 2);
+    context.restore();
+  }
 }
 
 function getCloudX(scene: AtmosphericScene, cloud: Cloud, time: number) {
@@ -2385,12 +2264,11 @@ function drawScene(
   drawSky(context, scene);
   drawAtmosphericWash(context, scene, activeColor, parallax);
   drawSun(context, scene, sprites, activeColor, parallax);
+  drawRiverGlow(context, scene, parallax);
   drawHaze(context, scene, motionTime, 'far', parallax);
   drawClouds(context, scene, motionTime, 'far', parallax);
   drawDistantHills(context, scene, parallax);
-  drawRiver(context, scene, parallax);
   drawHaze(context, scene, motionTime, 'middle', parallax);
-  drawRiverGlow(context, scene, parallax);
   drawClouds(context, scene, motionTime, 'middle', parallax);
   drawParticles(context, scene, motionTime, activeColor, parallax);
   drawHaze(context, scene, motionTime, 'near', parallax);
