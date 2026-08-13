@@ -44,6 +44,8 @@ type AtmosphericSprites = {
   distantHills: DistantHillSprites;
   foregroundTrees: HTMLCanvasElement;
   riverParticles: RiverParticleSprites;
+  risingRiverFogPatches: RisingRiverFogPatchSprites;
+  risingRiverGlows: RisingRiverGlowSprites;
   sun: HTMLCanvasElement;
 };
 
@@ -134,6 +136,55 @@ type RiverParticle = {
   opacity: number;
 };
 
+type RisingRiverFogPatchSprites = readonly [
+  HTMLCanvasElement,
+  HTMLCanvasElement,
+  HTMLCanvasElement,
+];
+
+type RisingRiverFogPatch = {
+  sourceX: number;
+  sourceY: number;
+  width: number;
+  height: number;
+  riseDistance: number;
+  phase: number;
+  duration: number;
+  horizontalDrift: number;
+  sway: number;
+  swayCycles: number;
+  growthX: number;
+  growthY: number;
+  opacity: number;
+  spriteIndex: 0 | 1 | 2;
+  depthProfile: AtmosphericDepthProfile;
+};
+
+type RisingRiverGlowSprites = readonly [
+  HTMLCanvasElement,
+  HTMLCanvasElement,
+  HTMLCanvasElement,
+];
+
+type RisingRiverGlow = {
+  sourceX: number;
+  sourceY: number;
+  width: number;
+  height: number;
+  riseDistance: number;
+  phase: number;
+  duration: number;
+  horizontalDrift: number;
+  sway: number;
+  swayCycles: number;
+  rotation: number;
+  rotationDrift: number;
+  growth: number;
+  opacity: number;
+  spriteIndex: 0 | 1 | 2;
+  depthProfile: AtmosphericDepthProfile;
+};
+
 type AtmosphericParticle = {
   x: number;
   y: number;
@@ -185,6 +236,8 @@ type AtmosphericScene = {
   distantHills: DistantHillLayer[];
   foregroundTrees: ForegroundTreeLine;
   riverParticles: RiverParticle[];
+  risingRiverFogPatches: RisingRiverFogPatch[];
+  risingRiverGlows: RisingRiverGlow[];
   particles: AtmosphericParticle[];
   projection: DepthProjection;
 };
@@ -592,6 +645,145 @@ function createRiverParticleSprites(): RiverParticleSprites {
     createRiverParticleSprite(0),
     createRiverParticleSprite(1),
     createRiverParticleSprite(2),
+  ];
+}
+
+function createRisingRiverFogPatchSprite(variant: 0 | 1 | 2) {
+  const width = 512;
+  const height = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+
+  const random = createSeededRandom(18431 + variant * 2707);
+  const riverColor = mixRgb(RIVER_LIGHT_BLUE, SKY_CYAN, 0.58);
+  const highlightColor = mixRgb(riverColor, [232, 248, 252], 0.34);
+  const drawFogLobe = (
+    x: number,
+    y: number,
+    radiusX: number,
+    radiusY: number,
+    color: Rgb,
+    opacity: number,
+  ) => {
+    context.save();
+    context.translate(width * x, height * y);
+    context.scale(width * radiusX, height * radiusY);
+    const fog = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+    fog.addColorStop(0, rgba(color, opacity));
+    fog.addColorStop(0.42, rgba(color, opacity * 0.62));
+    fog.addColorStop(0.78, rgba(color, opacity * 0.2));
+    fog.addColorStop(1, rgba(color, 0));
+    context.fillStyle = fog;
+    context.fillRect(-1, -1, 2, 2);
+    context.restore();
+  };
+
+  context.globalCompositeOperation = 'lighter';
+  drawFogLobe(0.5, 0.63, 0.48, 0.29, riverColor, 0.52);
+  drawFogLobe(
+    0.47 + (variant - 1) * 0.025,
+    0.52,
+    0.39,
+    0.22,
+    riverColor,
+    0.36,
+  );
+
+  const lobeCount = 6 + variant;
+  for (let index = 0; index < lobeCount; index += 1) {
+    const lane = lobeCount === 1 ? 0.5 : index / (lobeCount - 1);
+    drawFogLobe(
+      0.1 + lane * 0.8 + (random() - 0.5) * 0.055,
+      0.46 + (random() - 0.5) * 0.19,
+      0.13 + random() * 0.1,
+      0.16 + random() * 0.12,
+      random() > 0.46 ? highlightColor : riverColor,
+      0.32 + random() * 0.22,
+    );
+  }
+
+  featherSprite(context, width, height);
+  return canvas;
+}
+
+function createRisingRiverFogPatchSprites(): RisingRiverFogPatchSprites {
+  return [
+    createRisingRiverFogPatchSprite(0),
+    createRisingRiverFogPatchSprite(1),
+    createRisingRiverFogPatchSprite(2),
+  ];
+}
+
+function createRisingRiverGlowSprite(variant: 0 | 1 | 2) {
+  const width = 256;
+  const height = 384;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+
+  const variantOffset = variant === 0 ? -0.035 : variant === 1 ? 0.045 : 0;
+  const variantLean = variant === 0 ? -0.08 : variant === 1 ? 0.1 : 0.025;
+  const drawGlowLobe = (
+    x: number,
+    y: number,
+    radiusX: number,
+    radiusY: number,
+    color: Rgb,
+    opacity: number,
+  ) => {
+    context.save();
+    context.translate(width * x, height * y);
+    context.rotate(variantLean);
+    context.scale(width * radiusX, height * radiusY);
+    const glow = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+    glow.addColorStop(0, rgba(color, opacity));
+    glow.addColorStop(0.46, rgba(color, opacity * 0.48));
+    glow.addColorStop(1, rgba(color, 0));
+    context.fillStyle = glow;
+    context.fillRect(-1, -1, 2, 2);
+    context.restore();
+  };
+
+  context.globalCompositeOperation = 'lighter';
+  drawGlowLobe(0.5 + variantOffset, 0.62, 0.42, 0.32, RIVER_LIGHT_BLUE, 0.72);
+  drawGlowLobe(0.45 - variantOffset * 0.5, 0.46, 0.31, 0.29, [191, 228, 239], 0.65);
+  drawGlowLobe(0.55 + variantOffset * 0.8, 0.3, 0.24, 0.25, [207, 239, 248], 0.55);
+  drawGlowLobe(0.48 - variantOffset, 0.17, 0.16, 0.18, [224, 246, 252], 0.42);
+
+  context.save();
+  context.filter = 'blur(8px)';
+  context.strokeStyle = 'rgba(230,248,255,0.6)';
+  context.lineCap = 'round';
+  context.lineWidth = variant === 2 ? 16 : 13;
+  context.beginPath();
+  context.moveTo(width * (0.47 + variantOffset), height * 0.78);
+  context.bezierCurveTo(
+    width * (0.34 - variantOffset),
+    height * 0.6,
+    width * (0.65 + variantOffset),
+    height * 0.38,
+    width * (0.48 - variantOffset * 0.5),
+    height * 0.12,
+  );
+  context.stroke();
+  context.restore();
+
+  drawGlowLobe(0.5 + variantOffset * 0.4, 0.58, 0.18, 0.21, [244, 252, 255], 0.95);
+  drawGlowLobe(0.47 - variantOffset * 0.5, 0.38, 0.12, 0.17, [250, 254, 255], 0.85);
+  featherSprite(context, width, height);
+  return canvas;
+}
+
+function createRisingRiverGlowSprites(): RisingRiverGlowSprites {
+  return [
+    createRisingRiverGlowSprite(0),
+    createRisingRiverGlowSprite(1),
+    createRisingRiverGlowSprite(2),
   ];
 }
 
@@ -1648,6 +1840,8 @@ function createAtmosphericSprites(): AtmosphericSprites {
     },
     foregroundTrees: createForegroundTreesSprite(),
     riverParticles: createRiverParticleSprites(),
+    risingRiverFogPatches: createRisingRiverFogPatchSprites(),
+    risingRiverGlows: createRisingRiverGlowSprites(),
     sun: createSunSprite(),
   };
 }
@@ -1904,6 +2098,89 @@ function createRiverParticles(compact: boolean): RiverParticle[] {
   });
 }
 
+function createRisingRiverFogPatches(
+  width: number,
+  height: number,
+  compact: boolean,
+): RisingRiverFogPatch[] {
+  const count = compact ? 5 : 8;
+  const random = createSeededRandom(compact ? 25357 : 33791);
+  const minimumWidth = compact ? 120 : 180;
+  const maximumWidth = compact ? 220 : 360;
+  const minimumHeight = compact ? 42 : 52;
+  const maximumHeight = compact ? 82 : 115;
+  const minimumOpacity = compact ? 0.08 : 0.07;
+  const maximumOpacity = compact ? 0.14 : 0.13;
+
+  return Array.from({ length: count }, (_, index): RisingRiverFogPatch => {
+    const sourceY = height * (0.89 + random() * 0.05);
+    const targetY = height * (0.42 + random() * 0.14);
+    const depthMix = random();
+    const corridorProgress = (index + random() * 0.42) / (count - 1 + 0.42);
+    return {
+      sourceX: width * (0.025 + corridorProgress * 0.69),
+      sourceY,
+      width: minimumWidth + random() * (maximumWidth - minimumWidth),
+      height: minimumHeight + random() * (maximumHeight - minimumHeight),
+      riseDistance: sourceY - targetY,
+      phase: positiveModulo((index + random() * 0.35) / count, 1),
+      duration: 52000 + random() * 30000,
+      horizontalDrift: width * (0.05 + random() * 0.05),
+      sway: 3 + random() * 5,
+      swayCycles: 0.72 + random() * 0.68,
+      growthX: 0.2 + random() * 0.15,
+      growthY: 0.15 + random() * 0.15,
+      opacity: minimumOpacity + random() * (maximumOpacity - minimumOpacity),
+      spriteIndex: Math.floor(random() * 3) as 0 | 1 | 2,
+      depthProfile: {
+        translation: 0.04 + depthMix * 0.1,
+        perspective: 0.035 + depthMix * 0.095,
+        tilt: 0.02 + depthMix * 0.06,
+      },
+    };
+  });
+}
+
+function createRisingRiverGlows(
+  width: number,
+  height: number,
+  compact: boolean,
+): RisingRiverGlow[] {
+  const count = compact ? 7 : 12;
+  const random = createSeededRandom(compact ? 21401 : 29879);
+  const minimumWidth = compact ? 28 : 42;
+  const maximumWidth = compact ? 72 : 110;
+
+  return Array.from({ length: count }, (_, index): RisingRiverGlow => {
+    const glowWidth = minimumWidth + random() * (maximumWidth - minimumWidth);
+    const sourceY = height * (0.9 + random() * 0.04);
+    const targetY = height * (0.35 + random() * 0.15);
+    const depthMix = random();
+    return {
+      sourceX: width * (0.035 + (random() + random()) * 0.345),
+      sourceY,
+      width: glowWidth,
+      height: glowWidth * (1.45 + random() * 0.65),
+      riseDistance: sourceY - targetY,
+      phase: positiveModulo(index / count + random() * 0.16, 1),
+      duration: 34000 + random() * 18000,
+      horizontalDrift: width * (-0.025 + random() * 0.065),
+      sway: clamp(width * (0.006 + random() * 0.012), 5, compact ? 13 : 22),
+      swayCycles: 0.8 + random() * 0.8,
+      rotation: (random() - 0.5) * 0.08,
+      rotationDrift: (random() - 0.5) * 0.12,
+      growth: 0.2 + random() * 0.15,
+      opacity: 0.08 + random() * 0.14,
+      spriteIndex: Math.floor(random() * 3) as 0 | 1 | 2,
+      depthProfile: {
+        translation: 0.07 + depthMix * 0.13,
+        perspective: 0.06 + depthMix * 0.12,
+        tilt: 0.03 + depthMix * 0.09,
+      },
+    };
+  });
+}
+
 function createScene(
   width: number,
   height: number,
@@ -1928,6 +2205,8 @@ function createScene(
     distantHills: createDistantHills(width, height, compact, sprites.distantHills),
     foregroundTrees: createForegroundTrees(width, height, compact, sprites.foregroundTrees),
     riverParticles: createRiverParticles(compact),
+    risingRiverFogPatches: createRisingRiverFogPatches(width, height, compact),
+    risingRiverGlows: createRisingRiverGlows(width, height, compact),
     particles: createParticles(width, height, compact),
     projection: { x: 0, y: 0, scale: 1, alphaScale: 1 },
   };
@@ -2393,6 +2672,90 @@ function drawClouds(
   }
 }
 
+function drawRisingRiverFogPatches(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  sprites: RisingRiverFogPatchSprites,
+  time: number,
+  parallax: ParallaxFrame,
+) {
+  context.save();
+  context.globalCompositeOperation = 'source-over';
+
+  for (const patch of scene.risingRiverFogPatches) {
+    const progress = positiveModulo(patch.phase + time / patch.duration, 1);
+    const fadeIn = smoothstep(0, 0.14, progress);
+    const fadeOut = 1 - smoothstep(0.62, 1, progress);
+    const opacity = patch.opacity * fadeIn * fadeOut;
+    if (opacity <= 0.001) continue;
+
+    const sway = Math.sin(
+      progress * TAU * patch.swayCycles + patch.phase * TAU,
+    ) * patch.sway * scene.motionScale;
+    const x = patch.sourceX
+      + patch.horizontalDrift * progress * scene.motionScale
+      + sway;
+    const y = patch.sourceY - patch.riseDistance * progress;
+    const growthProgress = smoothstep(0, 1, progress);
+
+    drawDepthImage(
+      context,
+      scene,
+      sprites[patch.spriteIndex],
+      x,
+      y,
+      patch.width * (1 + patch.growthX * growthProgress),
+      patch.height * (1 + patch.growthY * growthProgress),
+      patch.depthProfile,
+      opacity,
+      parallax,
+    );
+  }
+  context.restore();
+}
+
+function drawRisingRiverGlows(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  sprites: RisingRiverGlowSprites,
+  time: number,
+  parallax: ParallaxFrame,
+) {
+  context.save();
+  context.globalCompositeOperation = 'source-over';
+
+  for (const glow of scene.risingRiverGlows) {
+    const progress = positiveModulo(glow.phase + time / glow.duration, 1);
+    const fadeIn = smoothstep(0, 0.12, progress);
+    const fadeOut = 1 - smoothstep(0.55, 1, progress);
+    const opacity = glow.opacity * fadeIn * fadeOut;
+    const sway = Math.sin(
+      progress * TAU * glow.swayCycles + glow.phase * TAU,
+    ) * glow.sway * scene.motionScale;
+    const x = glow.sourceX + glow.horizontalDrift * progress * scene.motionScale + sway;
+    const y = glow.sourceY - glow.riseDistance * progress;
+    const growth = 1 + glow.growth * smoothstep(0, 0.72, progress);
+    const rotation = glow.rotation
+      + glow.rotationDrift * progress * scene.motionScale
+      + Math.sin(progress * TAU + glow.phase * TAU) * 0.018 * scene.motionScale;
+
+    drawDepthImage(
+      context,
+      scene,
+      sprites[glow.spriteIndex],
+      x,
+      y,
+      glow.width * growth,
+      glow.height * growth,
+      glow.depthProfile,
+      opacity,
+      parallax,
+      rotation,
+    );
+  }
+  context.restore();
+}
+
 function drawRiverParticles(
   context: CanvasRenderingContext2D,
   scene: AtmosphericScene,
@@ -2580,6 +2943,14 @@ function drawScene(
   drawDistantHills(context, scene, parallax);
   drawHaze(context, scene, motionTime, 'middle', parallax);
   drawClouds(context, scene, motionTime, 'middle', parallax);
+  drawRisingRiverFogPatches(
+    context,
+    scene,
+    sprites.risingRiverFogPatches,
+    motionTime,
+    parallax,
+  );
+  drawRisingRiverGlows(context, scene, sprites.risingRiverGlows, motionTime, parallax);
   drawRiverParticles(context, scene, sprites.riverParticles, motionTime, parallax);
   drawParticles(context, scene, motionTime, activeColor, parallax);
   drawHaze(context, scene, motionTime, 'near', parallax);
