@@ -43,6 +43,7 @@ type AtmosphericSprites = {
   lavenderHaze: HTMLCanvasElement;
   distantHills: DistantHillSprites;
   foregroundTrees: HTMLCanvasElement;
+  riverParticles: RiverParticleSprites;
   sun: HTMLCanvasElement;
 };
 
@@ -101,11 +102,35 @@ type ForegroundTreeLine = {
 };
 
 type RiverGlowLobe = Readonly<{
-  centerX: number;
+  phase: number;
   halfWidth: number;
   halfHeight: number;
   opacity: number;
+  speed: number;
+  verticalOffset: number;
 }>;
+
+type RiverParticleSprites = readonly [
+  HTMLCanvasElement,
+  HTMLCanvasElement,
+  HTMLCanvasElement,
+];
+
+type RiverParticle = {
+  phase: number;
+  speed: number;
+  size: number;
+  spriteIndex: 0 | 1 | 2;
+  y: number;
+  horizontalDrift: number;
+  verticalDrift: number;
+  driftSpeed: number;
+  driftPhase: number;
+  lift: number;
+  rotation: number;
+  rotationSpeed: number;
+  opacity: number;
+};
 
 type AtmosphericParticle = {
   x: number;
@@ -157,6 +182,7 @@ type AtmosphericScene = {
   haze: HazeLayer[];
   distantHills: DistantHillLayer[];
   foregroundTrees: ForegroundTreeLine;
+  riverParticles: RiverParticle[];
   particles: AtmosphericParticle[];
   projection: DepthProjection;
 };
@@ -205,11 +231,19 @@ const TAU = Math.PI * 2;
 const DEGREE = Math.PI / 180;
 
 const DESKTOP_RIVER_GLOW_LOBES: ReadonlyArray<RiverGlowLobe> = [
-  { centerX: 0.43, halfWidth: 0.38, halfHeight: 0.05, opacity: 1 },
+  { phase: 0.02, halfWidth: 0.17, halfHeight: 0.04, opacity: 0.62, speed: 5, verticalOffset: -0.006 },
+  { phase: 0.21, halfWidth: 0.13, halfHeight: 0.032, opacity: 0.46, speed: 6.2, verticalOffset: 0.004 },
+  { phase: 0.43, halfWidth: 0.21, halfHeight: 0.05, opacity: 0.56, speed: 4.4, verticalOffset: 0 },
+  { phase: 0.66, halfWidth: 0.15, halfHeight: 0.036, opacity: 0.52, speed: 5.7, verticalOffset: -0.009 },
+  { phase: 0.84, halfWidth: 0.19, halfHeight: 0.044, opacity: 0.42, speed: 3.9, verticalOffset: 0.007 },
 ];
 const COMPACT_RIVER_GLOW_LOBES: ReadonlyArray<RiverGlowLobe> = [
-  { centerX: 0.47, halfWidth: 0.44, halfHeight: 0.055, opacity: 1 },
+  { phase: 0.04, halfWidth: 0.25, halfHeight: 0.048, opacity: 0.56, speed: 3.6, verticalOffset: -0.006 },
+  { phase: 0.29, halfWidth: 0.19, halfHeight: 0.04, opacity: 0.44, speed: 4.3, verticalOffset: 0.004 },
+  { phase: 0.55, halfWidth: 0.28, halfHeight: 0.058, opacity: 0.5, speed: 3.2, verticalOffset: 0.007 },
+  { phase: 0.79, halfWidth: 0.22, halfHeight: 0.045, opacity: 0.4, speed: 4, verticalOffset: -0.004 },
 ];
+const RIVER_GLOW_FLOW_BOUNDARY_X = 0.76;
 
 // Each normalized response is independent: 0 stays anchored and 1 receives
 // the light camera's full translation, cursor-weighted scale, or plane tilt.
@@ -253,6 +287,11 @@ const COMPACT_CLOUD_SPECS: CloudSpec[] = [
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum);
+}
+
+function smoothstep(edgeStart: number, edgeEnd: number, value: number) {
+  const progress = clamp((value - edgeStart) / Math.max(edgeEnd - edgeStart, 0.0001), 0, 1);
+  return progress * progress * (3 - 2 * progress);
 }
 
 function positiveModulo(value: number, divisor: number) {
@@ -497,6 +536,61 @@ function createSunSprite() {
   context.fillStyle = core;
   context.fillRect(0, 0, size, size);
   return canvas;
+}
+
+function createRiverParticleSprite(variant: 0 | 1 | 2) {
+  const size = 64;
+  const center = size * 0.5;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+
+  const vertices = variant === 0
+    ? [[0, -10], [9, 8], [-9, 8]]
+    : variant === 1
+      ? [[0, -13], [6, 10], [-6, 7]]
+      : [[-3, -11], [11, 5], [-8, 9]];
+  const traceTriangle = () => {
+    context.beginPath();
+    context.moveTo(center + vertices[0][0], center + vertices[0][1]);
+    context.lineTo(center + vertices[1][0], center + vertices[1][1]);
+    context.lineTo(center + vertices[2][0], center + vertices[2][1]);
+    context.closePath();
+  };
+
+  context.save();
+  context.filter = 'blur(5px)';
+  context.fillStyle = 'rgba(255,255,255,0.34)';
+  traceTriangle();
+  context.fill();
+  context.restore();
+
+  context.fillStyle = 'rgba(255,255,255,0.92)';
+  traceTriangle();
+  context.fill();
+
+  const highlight = context.createLinearGradient(
+    center,
+    center - 13,
+    center,
+    center + 10,
+  );
+  highlight.addColorStop(0, 'rgba(255,255,255,0.98)');
+  highlight.addColorStop(1, 'rgba(255,255,255,0.54)');
+  context.fillStyle = highlight;
+  traceTriangle();
+  context.fill();
+  return canvas;
+}
+
+function createRiverParticleSprites(): RiverParticleSprites {
+  return [
+    createRiverParticleSprite(0),
+    createRiverParticleSprite(1),
+    createRiverParticleSprite(2),
+  ];
 }
 
 function createDistantHillSprite(kind: keyof DistantHillSprites) {
@@ -1551,6 +1645,7 @@ function createAtmosphericSprites(): AtmosphericSprites {
       near: createDistantHillSprite('near'),
     },
     foregroundTrees: createForegroundTreesSprite(),
+    riverParticles: createRiverParticleSprites(),
     sun: createSunSprite(),
   };
 }
@@ -1758,6 +1853,48 @@ function createParticles(width: number, height: number, compact: boolean) {
   });
 }
 
+function createRiverParticles(compact: boolean): RiverParticle[] {
+  const count = compact ? 28 : 52;
+  const random = createSeededRandom(compact ? 12457 : 17681);
+  const minimumSize = compact ? 1.4 : 1.8;
+  const maximumSize = compact ? 4.2 : 5.5;
+  const minimumY = compact ? 0.72 : 0.69;
+  const maximumY = compact ? 0.91 : 0.89;
+
+  return Array.from({ length: count }, (_, index): RiverParticle => {
+    const sizeRoll = random();
+    const size = compact
+      ? sizeRoll < 0.6
+        ? 1.4 + random() * 1.2
+        : sizeRoll < 0.9
+          ? 2.6 + random() * 0.9
+          : 3.5 + random() * 0.7
+      : sizeRoll < 0.6
+        ? 1.8 + random() * 1.2
+        : sizeRoll < 0.9
+          ? 3 + random() * 1.5
+          : 4.5 + random() * 1;
+    const spinDirection = random() < 0.5 ? -1 : 1;
+    const fastTumble = random() < 0.15;
+    return {
+      phase: positiveModulo(random() + index / count, 1),
+      speed: 4.5 + random() * 4.5,
+      size: clamp(size, minimumSize, maximumSize),
+      spriteIndex: Math.floor(random() * 3) as 0 | 1 | 2,
+      y: minimumY + (random() + random()) * 0.5 * (maximumY - minimumY),
+      horizontalDrift: 2 + random() * 7,
+      verticalDrift: 2 + random() * 5,
+      driftSpeed: 0.00016 + random() * 0.00019,
+      driftPhase: random() * TAU,
+      lift: 0.008 + random() * 0.035,
+      rotation: random() * TAU,
+      rotationSpeed: spinDirection
+        * (fastTumble ? 0.61 + random() * 0.35 : 0.14 + random() * 0.42),
+      opacity: 0.46 + random() * 0.38,
+    };
+  });
+}
+
 function createScene(
   width: number,
   height: number,
@@ -1781,6 +1918,7 @@ function createScene(
     haze: createHazeLayers(width, height, sprites),
     distantHills: createDistantHills(width, height, compact, sprites.distantHills),
     foregroundTrees: createForegroundTrees(width, height, compact, sprites.foregroundTrees),
+    riverParticles: createRiverParticles(compact),
     particles: createParticles(width, height, compact),
     projection: { x: 0, y: 0, scale: 1, alphaScale: 1 },
   };
@@ -2128,6 +2266,7 @@ function drawForegroundGlowTint(
 function drawRiverGlow(
   context: CanvasRenderingContext2D,
   scene: AtmosphericScene,
+  time: number,
   parallax: ParallaxFrame,
 ) {
   const centerY = scene.height * (scene.compact ? 0.92 : 0.91);
@@ -2136,11 +2275,52 @@ function drawRiverGlow(
     ? COMPACT_RIVER_GLOW_LOBES
     : DESKTOP_RIVER_GLOW_LOBES;
 
+  context.save();
+  context.beginPath();
+  context.rect(0, 0, scene.width * RIVER_GLOW_FLOW_BOUNDARY_X, scene.height);
+  context.clip();
+
+  projectAtDepth(
+    parallax,
+    scene.width * 0.33,
+    centerY,
+    LIGHT_DEPTH_PROFILES.riverGlow,
+    scene.projection,
+  );
+  context.save();
+  context.translate(scene.projection.x, scene.projection.y);
+  context.scale(
+    scene.width * 0.58,
+    scene.height * (scene.compact ? 0.064 : 0.058),
+  );
+  const riverBed = context.createRadialGradient(0, 0, 0, 0, 0, 1);
+  riverBed.addColorStop(0, rgba(riverGlowColor, 0.13 * scene.projection.alphaScale));
+  riverBed.addColorStop(0.48, rgba(riverGlowColor, 0.065 * scene.projection.alphaScale));
+  riverBed.addColorStop(0.82, rgba(riverGlowColor, 0.018 * scene.projection.alphaScale));
+  riverBed.addColorStop(1, rgba(riverGlowColor, 0));
+  context.fillStyle = riverBed;
+  context.fillRect(-1, -1, 2, 2);
+  context.restore();
+
   for (const lobe of lobes) {
+    const flowDistance = Math.max(
+      (RIVER_GLOW_FLOW_BOUNDARY_X + lobe.halfWidth) * scene.width,
+      1,
+    );
+    const progress = positiveModulo(
+      lobe.phase + time * 0.001 * lobe.speed / flowDistance,
+      1,
+    );
+    const fadeIn = smoothstep(0, 0.16, progress);
+    const fadeOut = 1 - smoothstep(0.9, 1, progress);
+    const flowOpacity = lobe.opacity * fadeIn * fadeOut;
+    const centerX = -lobe.halfWidth
+      + (RIVER_GLOW_FLOW_BOUNDARY_X + lobe.halfWidth) * progress;
+
     projectAtDepth(
       parallax,
-      scene.width * lobe.centerX,
-      centerY,
+      scene.width * centerX,
+      centerY + scene.height * lobe.verticalOffset,
       LIGHT_DEPTH_PROFILES.riverGlow,
       scene.projection,
     );
@@ -2150,21 +2330,22 @@ function drawRiverGlow(
     const glow = context.createRadialGradient(0, 0, 0, 0, 0, 1);
     glow.addColorStop(
       0,
-      rgba(riverGlowColor, 0.36 * lobe.opacity * scene.projection.alphaScale),
+      rgba(riverGlowColor, 0.36 * flowOpacity * scene.projection.alphaScale),
     );
     glow.addColorStop(
       0.42,
-      rgba(riverGlowColor, 0.18 * lobe.opacity * scene.projection.alphaScale),
+      rgba(riverGlowColor, 0.18 * flowOpacity * scene.projection.alphaScale),
     );
     glow.addColorStop(
       0.76,
-      rgba(riverGlowColor, 0.05 * lobe.opacity * scene.projection.alphaScale),
+      rgba(riverGlowColor, 0.05 * flowOpacity * scene.projection.alphaScale),
     );
     glow.addColorStop(1, rgba(riverGlowColor, 0));
     context.fillStyle = glow;
     context.fillRect(-1, -1, 2, 2);
     context.restore();
   }
+  context.restore();
 }
 
 function getCloudX(scene: AtmosphericScene, cloud: Cloud, time: number) {
@@ -2201,6 +2382,88 @@ function drawClouds(
       rotation,
     );
   }
+}
+
+function drawRiverParticles(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  sprites: RiverParticleSprites,
+  time: number,
+  parallax: ParallaxFrame,
+) {
+  const entryMargin = 0.035;
+  const travelSpan = RIVER_GLOW_FLOW_BOUNDARY_X + entryMargin * 2;
+  const flowDistance = Math.max(scene.width * travelSpan, 1);
+  const minimumY = scene.compact ? 0.72 : 0.69;
+  const maximumY = scene.compact ? 0.91 : 0.89;
+
+  context.save();
+  context.beginPath();
+  context.rect(0, 0, scene.width * RIVER_GLOW_FLOW_BOUNDARY_X, scene.height);
+  context.clip();
+
+  for (const particle of scene.riverParticles) {
+    const progress = positiveModulo(
+      particle.phase
+        + time * 0.001 * particle.speed * scene.motionScale / flowDistance,
+      1,
+    );
+    const turbulenceTime = time * particle.driftSpeed * scene.motionScale
+      + particle.driftPhase;
+    const x = scene.width * (-entryMargin + travelSpan * progress)
+      + Math.sin(turbulenceTime * 0.83) * particle.horizontalDrift * scene.motionScale;
+    const y = scene.height * (particle.y - particle.lift * progress)
+      + Math.cos(turbulenceTime) * particle.verticalDrift * scene.motionScale;
+    const normalizedX = x / Math.max(scene.width, 1);
+    const fadeIn = smoothstep(-entryMargin, 0.015, normalizedX);
+    const fadeOut = 1 - smoothstep(
+      RIVER_GLOW_FLOW_BOUNDARY_X - 0.04,
+      RIVER_GLOW_FLOW_BOUNDARY_X,
+      normalizedX,
+    );
+    const verticalProgress = clamp(
+      (particle.y - minimumY) / Math.max(maximumY - minimumY, 0.0001),
+      0,
+      1,
+    );
+    const verticalTaper = 0.68 + 0.32
+      * smoothstep(0, 0.18, verticalProgress)
+      * (1 - smoothstep(0.82, 1, verticalProgress));
+
+    projectAtDepth(
+      parallax,
+      x,
+      y,
+      LIGHT_DEPTH_PROFILES.riverGlow,
+      scene.projection,
+    );
+
+    const shimmer = 0.88 + Math.sin(time * 0.00072 + particle.driftPhase) * 0.12;
+    const spriteScale = particle.spriteIndex === 1 ? 5.4 : particle.spriteIndex === 0 ? 4 : 3.8;
+    const spriteSize = particle.size * spriteScale;
+    const rotation = particle.rotation
+      + time * 0.001 * particle.rotationSpeed * scene.motionScale
+      + Math.sin(turbulenceTime * 0.7) * 0.12;
+    context.save();
+    context.translate(scene.projection.x, scene.projection.y);
+    context.rotate(rotation);
+    context.scale(scene.projection.scale, scene.projection.scale);
+    context.globalAlpha = particle.opacity
+      * fadeIn
+      * fadeOut
+      * verticalTaper
+      * shimmer
+      * scene.projection.alphaScale;
+    context.drawImage(
+      sprites[particle.spriteIndex],
+      -spriteSize * 0.5,
+      -spriteSize * 0.5,
+      spriteSize,
+      spriteSize,
+    );
+    context.restore();
+  }
+  context.restore();
 }
 
 function drawParticles(
@@ -2297,12 +2560,13 @@ function drawScene(
   drawSky(context, scene);
   drawAtmosphericWash(context, scene, activeColor, parallax);
   drawSun(context, scene, sprites, activeColor, parallax);
-  drawRiverGlow(context, scene, parallax);
+  drawRiverGlow(context, scene, motionTime, parallax);
   drawHaze(context, scene, motionTime, 'far', parallax);
   drawClouds(context, scene, motionTime, 'far', parallax);
   drawDistantHills(context, scene, parallax);
   drawHaze(context, scene, motionTime, 'middle', parallax);
   drawClouds(context, scene, motionTime, 'middle', parallax);
+  drawRiverParticles(context, scene, sprites.riverParticles, motionTime, parallax);
   drawParticles(context, scene, motionTime, activeColor, parallax);
   drawHaze(context, scene, motionTime, 'near', parallax);
   drawClouds(context, scene, motionTime, 'foreground', parallax);
