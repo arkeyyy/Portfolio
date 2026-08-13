@@ -1107,12 +1107,11 @@ function createPineForestBand(
   });
 }
 
-function drawForestCanopyEdge(
+function drawForestCanopyUnderlay(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
   skyline: ReadonlyArray<ForestSkylinePoint>,
-  brushes: ReadonlyArray<HTMLCanvasElement>,
   random: () => number,
 ) {
   const samples: Array<ForestSkylinePoint> = [];
@@ -1147,51 +1146,6 @@ function drawForestCanopyEdge(
   context.closePath();
   context.fill();
   context.restore();
-
-  for (let index = 0; index < samples.length;) {
-    const point = samples[index];
-    const x = point[0] * width;
-    const y = point[1] * height;
-    const clusterWidth = width * (0.032 + random() * 0.038);
-    const clusterHeight = height * (0.052 + random() * (point[0] < 0.3 ? 0.074 : 0.056));
-    const centerY = y + (random() - 0.5) * height * 0.052;
-    if (random() < 0.48) {
-      drawCanopyBranchSystem(
-        context,
-        x,
-        centerY,
-        clusterWidth,
-        clusterHeight,
-        random,
-      );
-    }
-    drawForestBrush(
-      context,
-      brushes[Math.floor(random() * brushes.length)],
-      x,
-      centerY,
-      clusterWidth,
-      clusterHeight,
-      (random() - 0.5) * 0.46,
-      0.38 + random() * 0.28,
-    );
-    const lobeCount = 4 + Math.floor(random() * 4);
-    for (let lobe = 0; lobe < lobeCount; lobe += 1) {
-      const angle = random() * TAU;
-      const distance = 0.22 + random() * 0.72;
-      drawForestBrush(
-        context,
-        brushes[Math.floor(random() * brushes.length)],
-        x + Math.cos(angle) * clusterWidth * distance * 0.42,
-        centerY + Math.sin(angle) * clusterHeight * distance * 0.34,
-        clusterWidth * (0.26 + random() * 0.4),
-        clusterHeight * (0.24 + random() * 0.38),
-        (random() - 0.5) * 0.58,
-        0.28 + random() * 0.3,
-      );
-    }
-    index += 1 + Math.floor(random() * 3);
-  }
 }
 
 function drawForestBrush(
@@ -1221,41 +1175,18 @@ function drawForestFoliageField(
   random: () => number,
 ) {
   for (const zone of zones) {
-    const skylineCount = Math.max(18, Math.round(zone.count * 0.55));
-    for (let index = 0; index < skylineCount; index += 1) {
-      const mix = (index + 0.15 + random() * 0.7) / skylineCount;
-      const x = width * (zone.start + (zone.end - zone.start) * mix);
-      const top = height * (
-        zone.topStart
-        + (zone.topEnd - zone.topStart) * mix
-        + (random() - 0.5) * 0.035
-      );
-      const stampWidth = width * (
-        zone.minimumWidth * 0.82
-        + random() * (zone.maximumWidth - zone.minimumWidth) * 0.92
-      );
-      drawForestBrush(
-        context,
-        brushes[Math.floor(random() * brushes.length)],
-        x,
-        top,
-        stampWidth,
-        stampWidth * (0.72 + random() * 0.28),
-        (random() - 0.5) * 0.42,
-        0.64 + random() * 0.31,
-      );
-    }
-
-    for (let index = 0; index < zone.count; index += 1) {
+    const lowerFoliageCount = Math.round(zone.count * 1.16);
+    for (let index = 0; index < lowerFoliageCount; index += 1) {
       const horizontalMix = random();
       const top = zone.topStart + (zone.topEnd - zone.topStart) * horizontalMix;
-      const verticalMix = Math.pow(random(), 0.64);
+      const lowerBandTop = Math.max(top + 0.15, zone.baseY - 0.23);
+      const verticalMix = Math.pow(random(), 0.72);
       const x = width * (zone.start + (zone.end - zone.start) * horizontalMix);
-      const y = height * (top + (zone.baseY - top) * verticalMix);
+      const y = height * (lowerBandTop + (zone.baseY - lowerBandTop) * verticalMix);
       const stampWidth = width * (
         zone.minimumWidth
         + random() * (zone.maximumWidth - zone.minimumWidth)
-      ) * (0.78 + verticalMix * 0.38);
+      ) * (0.84 + verticalMix * 0.44);
       drawForestBrush(
         context,
         brushes[Math.floor(random() * brushes.length)],
@@ -1264,7 +1195,7 @@ function drawForestFoliageField(
         stampWidth,
         stampWidth * (0.62 + random() * 0.28),
         (random() - 0.5) * 0.5,
-        0.28 + verticalMix * 0.46 + random() * 0.2,
+        0.38 + verticalMix * 0.38 + random() * 0.18,
       );
     }
   }
@@ -1278,11 +1209,11 @@ function drawForestBushRows(
   random: () => number,
   baseY: number,
 ) {
-  const rowCount = 7;
+  const rowCount = 8;
   for (let row = 0; row < rowCount; row += 1) {
     const progress = row / (rowCount - 1);
-    const count = 56 + row * 6;
-    const rowY = baseY - 0.12 + progress * 0.43;
+    const count = 64 + row * 7;
+    const rowY = baseY - 0.075 + progress * 0.39;
     const rowOffset = row % 2 === 0 ? 0.18 : 0.68;
     for (let index = 0; index < count; index += 1) {
       const x = width * ((index + rowOffset + (random() - 0.5) * 0.56) / count);
@@ -1326,6 +1257,64 @@ function drawForestPines(
   }
 }
 
+function drawPineUndergrowth(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  brushes: ReadonlyArray<HTMLCanvasElement>,
+  pines: ReadonlyArray<ForestPineAnchor>,
+  random: () => number,
+) {
+  for (const pine of pines) {
+    if (random() > 0.62) continue;
+    const pineX = width * pine.x;
+    const pineTop = height * pine.top;
+    const pineWidth = width * pine.width;
+    const pineHeight = height * pine.height;
+    const clusterX = pineX + (random() - 0.5) * pineWidth * 0.86;
+    const clusterY = pineTop + pineHeight * (0.78 + random() * 0.13);
+    const clusterWidth = Math.max(width * 0.016, pineWidth * (0.94 + random() * 0.82));
+    const clusterHeight = Math.max(
+      height * 0.024,
+      pineHeight * (0.064 + random() * 0.042),
+    );
+
+    drawCanopyBranchSystem(
+      context,
+      clusterX,
+      clusterY,
+      clusterWidth,
+      clusterHeight,
+      random,
+    );
+    drawForestBrush(
+      context,
+      brushes[Math.floor(random() * brushes.length)],
+      clusterX,
+      clusterY,
+      clusterWidth,
+      clusterHeight,
+      (random() - 0.5) * 0.34,
+      0.34 + random() * 0.2,
+    );
+
+    const lobeCount = 3 + Math.floor(random() * 3);
+    for (let lobe = 0; lobe < lobeCount; lobe += 1) {
+      const side = lobe % 2 === 0 ? -1 : 1;
+      drawForestBrush(
+        context,
+        brushes[Math.floor(random() * brushes.length)],
+        clusterX + clusterWidth * side * (0.2 + random() * 0.22),
+        clusterY + clusterHeight * (0.04 + random() * 0.18),
+        clusterWidth * (0.34 + random() * 0.28),
+        clusterHeight * (0.38 + random() * 0.3),
+        (random() - 0.5) * 0.42,
+        0.26 + random() * 0.2,
+      );
+    }
+  }
+}
+
 function colorForestMask(
   context: CanvasRenderingContext2D,
   width: number,
@@ -1358,8 +1347,9 @@ function createForestLayer(
   if (!context) return canvas;
   const random = createSeededRandom(seed);
 
-  drawForestCanopyEdge(context, width, height, skyline, foliageBrushes, random);
+  drawForestCanopyUnderlay(context, width, height, skyline, random);
   drawForestPines(context, width, height, pineBrushes, pines);
+  drawPineUndergrowth(context, width, height, foliageBrushes, pines, random);
   drawForestFoliageField(context, width, height, foliageBrushes, zones, random);
   drawForestBushRows(context, width, height, foliageBrushes, random, baseY);
 
