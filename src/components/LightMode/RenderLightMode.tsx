@@ -188,8 +188,9 @@ const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const SKY_CYAN: Rgb = [114, 199, 232];
 const FOREGROUND_FOG_CYAN: Rgb = [92, 196, 238];
 const SKY_LAVENDER: Rgb = [178, 166, 226];
-const WARM_RIGHT_GLOW: Rgb = [255, 235, 196];
 const RIVER_LIGHT_BLUE: Rgb = [157, 205, 214];
+const RIGHT_GLOW_GOLD: Rgb = [255, 235, 196];
+const FOREGROUND_GLOW_GOLD: Rgb = [239, 188, 128];
 const FOREGROUND_TREE_BLACK: Rgb = [46, 48, 46];
 const FOREGROUND_TREE_WARM_BLACK: Rgb = [209, 179, 141];
 const FOREGROUND_TREE_BACK: Rgb = [85, 89, 85];
@@ -1919,11 +1920,7 @@ function drawAtmosphericWash(
   parallax: ParallaxFrame,
 ) {
   const shortSide = Math.min(scene.width, scene.height);
-  const rightGlowColor = mixRgb(
-    mixRgb(WARM_RIGHT_GLOW, activeColor, 0.4),
-    [255, 255, 255],
-    0.35,
-  );
+  const rightGlowColor = mixRgb(RIGHT_GLOW_GOLD, activeColor, 0.3);
   const rightGlowX = scene.width * 1.02
     + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
   const rightGlowY = scene.height * 0.38
@@ -2090,6 +2087,42 @@ function drawForegroundTrees(
     scene.foregroundTrees.opacity,
     parallax,
   );
+}
+
+function drawForegroundGlowTint(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  activeColor: Rgb,
+  parallax: ParallaxFrame,
+) {
+  const tintColor = mixRgb(FOREGROUND_GLOW_GOLD, activeColor, 0.34);
+
+  projectAtDepth(
+    parallax,
+    scene.width * 1.06,
+    scene.height * 0.8,
+    LIGHT_DEPTH_PROFILES.foregroundTrees,
+    scene.projection,
+  );
+  const radius = Math.max(scene.width * 0.72, scene.height * 0.78);
+  const tint = context.createRadialGradient(
+    scene.projection.x,
+    scene.projection.y,
+    0,
+    scene.projection.x,
+    scene.projection.y,
+    radius,
+  );
+  tint.addColorStop(0, rgba(tintColor, 0.14));
+  tint.addColorStop(0.48, rgba(tintColor, 0.07));
+  tint.addColorStop(0.78, rgba(tintColor, 0.015));
+  tint.addColorStop(1, rgba(tintColor, 0));
+
+  context.save();
+  context.globalCompositeOperation = 'color';
+  context.fillStyle = tint;
+  context.fillRect(0, 0, scene.width, scene.height);
+  context.restore();
 }
 
 function drawRiverGlow(
@@ -2275,6 +2308,7 @@ function drawScene(
   drawClouds(context, scene, motionTime, 'foreground', parallax);
   drawEdgeGlow(context, scene, activeColor, parallax);
   drawForegroundTrees(context, scene, parallax);
+  drawForegroundGlowTint(context, scene, activeColor, parallax);
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
 }
