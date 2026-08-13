@@ -2505,9 +2505,9 @@ function createRisingRiverFragments(
           ? leftGlowAssignments[extensionIndex]
           : glowAssignments[index],
       depthProfile: {
-        translation: 0.07 + depthMix * 0.11,
-        perspective: 0.06 + depthMix * 0.1,
-        tilt: 0.04 + depthMix * 0.08,
+        translation: 0.3 + depthMix * 0.26,
+        perspective: 0.26 + depthMix * 0.24,
+        tilt: 0.18 + depthMix * 0.24,
       },
     };
   });
@@ -3236,15 +3236,7 @@ function drawRisingRiverFragments(
     );
     const opacity = fragment.opacity * fadeIn * fadeOut * canopyReveal;
     if (opacity <= 0.001) continue;
-    const offscreenMargin = fragment.baseSize * 2.5;
-    if (
-      x < -offscreenMargin
-      || x > scene.width + offscreenMargin
-      || y < -offscreenMargin
-      || y > scene.height + offscreenMargin
-    ) continue;
-
-    const depthResponse = 1 - smoothstep(0, 1, progress) * 0.75;
+    const depthResponse = 1 - smoothstep(0, 1, riseProgress) * 0.45;
     projectAtDepth(
       parallax,
       x,
@@ -3253,6 +3245,13 @@ function drawRisingRiverFragments(
       scene.projection,
       depthResponse,
     );
+    const offscreenMargin = fragment.baseSize * 2.5;
+    if (
+      scene.projection.x < -offscreenMargin
+      || scene.projection.x > scene.width + offscreenMargin
+      || scene.projection.y < -offscreenMargin
+      || scene.projection.y > scene.height + offscreenMargin
+    ) continue;
 
     const geometricScale = 1
       - (1 - fragment.terminalScale) * riseProgress;
