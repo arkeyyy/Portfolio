@@ -120,6 +120,8 @@ type RiverParticle = {
   phase: number;
   speed: number;
   size: number;
+  depthProfile: AtmosphericDepthProfile;
+  depthScale: number;
   spriteIndex: 0 | 1 | 2;
   y: number;
   horizontalDrift: number;
@@ -1854,7 +1856,7 @@ function createParticles(width: number, height: number, compact: boolean) {
 }
 
 function createRiverParticles(compact: boolean): RiverParticle[] {
-  const count = compact ? 28 : 52;
+  const count = compact ? 56 : 96;
   const random = createSeededRandom(compact ? 12457 : 17681);
   const minimumSize = compact ? 1.4 : 1.8;
   const maximumSize = compact ? 4.2 : 5.5;
@@ -1863,6 +1865,7 @@ function createRiverParticles(compact: boolean): RiverParticle[] {
 
   return Array.from({ length: count }, (_, index): RiverParticle => {
     const sizeRoll = random();
+    const depthMix = random();
     const size = compact
       ? sizeRoll < 0.6
         ? 1.4 + random() * 1.2
@@ -1880,6 +1883,12 @@ function createRiverParticles(compact: boolean): RiverParticle[] {
       phase: positiveModulo(random() + index / count, 1),
       speed: 4.5 + random() * 4.5,
       size: clamp(size, minimumSize, maximumSize),
+      depthProfile: {
+        translation: 0.14 + depthMix * 0.28,
+        perspective: 0.12 + depthMix * 0.3,
+        tilt: 0.08 + depthMix * 0.3,
+      },
+      depthScale: 0.78 + depthMix * 0.42,
       spriteIndex: Math.floor(random() * 3) as 0 | 1 | 2,
       y: minimumY + (random() + random()) * 0.5 * (maximumY - minimumY),
       horizontalDrift: 2 + random() * 7,
@@ -1890,7 +1899,7 @@ function createRiverParticles(compact: boolean): RiverParticle[] {
       rotation: random() * TAU,
       rotationSpeed: spinDirection
         * (fastTumble ? 0.61 + random() * 0.35 : 0.14 + random() * 0.42),
-      opacity: 0.46 + random() * 0.38,
+      opacity: (0.46 + random() * 0.38) * (0.72 + depthMix * 0.28),
     };
   });
 }
@@ -2434,7 +2443,7 @@ function drawRiverParticles(
       parallax,
       x,
       y,
-      LIGHT_DEPTH_PROFILES.riverGlow,
+      particle.depthProfile,
       scene.projection,
     );
 
@@ -2444,10 +2453,15 @@ function drawRiverParticles(
     const rotation = particle.rotation
       + time * 0.001 * particle.rotationSpeed * scene.motionScale
       + Math.sin(turbulenceTime * 0.7) * 0.12;
+    const depthTilt = clamp(particle.depthProfile.tilt, 0, 1);
+    const pitch = -parallax.positionY * parallax.maximumPitch * depthTilt;
+    const yaw = parallax.positionX * parallax.maximumYaw * depthTilt;
     context.save();
     context.translate(scene.projection.x, scene.projection.y);
+    context.transform(1, Math.sin(pitch) * 0.11, Math.sin(yaw) * 0.085, 1, 0, 0);
     context.rotate(rotation);
-    context.scale(scene.projection.scale, scene.projection.scale);
+    const depthScale = scene.projection.scale * particle.depthScale;
+    context.scale(depthScale, depthScale);
     context.globalAlpha = particle.opacity
       * fadeIn
       * fadeOut
