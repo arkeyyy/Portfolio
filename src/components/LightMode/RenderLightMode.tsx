@@ -37,6 +37,8 @@ type CloudSprites = {
 };
 
 type AtmosphericSprites = {
+  washes: AtmosphericWashSprites;
+  particles: AtmosphericParticleSprites;
   clouds: CloudSprites;
   cyanHaze: HTMLCanvasElement;
   foregroundCyanHaze: HTMLCanvasElement;
@@ -141,6 +143,7 @@ type RiverLightMote = {
 };
 
 type RiverParticle = {
+  qualityRank: number;
   phase: number;
   speed: number;
   size: number;
@@ -240,6 +243,7 @@ type RisingRiverGlow = {
 };
 
 type AtmosphericParticle = {
+  qualityRank: number;
   x: number;
   y: number;
   size: number;
@@ -284,6 +288,8 @@ type AtmosphericScene = {
   height: number;
   compact: boolean;
   motionScale: number;
+  pixelRatio: number;
+  parallax: ParallaxFrame;
   sun: SunState;
   clouds: Cloud[];
   haze: HazeLayer[];
@@ -297,6 +303,147 @@ type AtmosphericScene = {
   particles: AtmosphericParticle[];
   projection: DepthProjection;
 };
+
+type AtmosphericWashSprites = {
+  sky: HTMLCanvasElement;
+  riverBed: HTMLCanvasElement;
+  riverLobe: HTMLCanvasElement;
+  sunAccent: HTMLCanvasElement;
+  compactSunAccent: HTMLCanvasElement;
+  cyan: HTMLCanvasElement;
+  lavender: HTMLCanvasElement;
+  right: HTMLCanvasElement;
+  lowerRight: HTMLCanvasElement;
+  accent: HTMLCanvasElement;
+  edge: HTMLCanvasElement;
+  tint: HTMLCanvasElement;
+};
+
+type AtmosphericParticleSprites = {
+  atlas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+  tint: Rgb;
+};
+
+type CachedPlane = {
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+};
+
+type FramePlanes = {
+  sky: CachedPlane;
+  edge: CachedPlane;
+  tint: CachedPlane;
+  tintScratch: CachedPlane;
+  color: Rgb;
+  rightColor: Rgb;
+  foregroundColor: Rgb;
+  cameraX: number;
+  cameraY: number;
+  valid: boolean;
+};
+
+type QualityTier = 0 | 1 | 2;
+type AdaptiveQuality = {
+  tier: QualityTier;
+  warmupUntil: number;
+  changedAt: number;
+  paintEma: number;
+  overloadPaints: number;
+  stablePaints: number;
+  lateSamples: Uint8Array;
+  sampleIndex: number;
+  sampleCount: number;
+  lateCount: number;
+  triangleWeights: Float64Array;
+  particleWeights: Float64Array;
+};
+
+const QUALITY_PROFILES = [
+  { desktopFps: 60, mobileFps: 30, triangles: 1, particles: 1 },
+  { desktopFps: 45, mobileFps: 27, triangles: 0.75, particles: 0.5 },
+  { desktopFps: 30, mobileFps: 24, triangles: 0.5, particles: 0.25 },
+] as const;
+const QUALITY_FADE_MS = 650;
+
+function createAdaptiveQuality(now: number): AdaptiveQuality {
+  return {
+    tier: 0, warmupUntil: now + 2000, changedAt: -Infinity,
+    paintEma: 0, overloadPaints: 0, stablePaints: 0,
+    lateSamples: new Uint8Array(120), sampleIndex: 0, sampleCount: 0, lateCount: 0,
+    triangleWeights: new Float64Array([1, 1, 1, 1]),
+    particleWeights: new Float64Array([1, 1, 1, 1]),
+  };
+}
+
+function resetQualityMeasurements(quality: AdaptiveQuality, now: number) {
+  quality.warmupUntil = now + 2000;
+  quality.paintEma = 0;
+  quality.overloadPaints = quality.stablePaints = 0;
+  quality.sampleIndex = quality.sampleCount = quality.lateCount = 0;
+  quality.lateSamples.fill(0);
+}
+
+function recordQualityPaint(
+  quality: AdaptiveQuality,
+  now: number,
+  cost: number,
+  scheduledElapsed: number,
+  interval: number,
+) {
+  if (now < quality.warmupUntil) return;
+  quality.paintEma = quality.sampleCount === 0 ? cost
+    : quality.paintEma + (cost - quality.paintEma) * 0.05;
+  quality.lateCount -= quality.lateSamples[quality.sampleIndex];
+  const late = scheduledElapsed > interval * 1.35 ? 1 : 0;
+  quality.lateSamples[quality.sampleIndex] = late;
+  quality.lateCount += late;
+  quality.sampleIndex = (quality.sampleIndex + 1) % quality.lateSamples.length;
+  quality.sampleCount = Math.min(quality.sampleCount + 1, quality.lateSamples.length);
+  quality.overloadPaints = quality.paintEma > interval * 0.72
+    ? quality.overloadPaints + 1 : 0;
+  quality.stablePaints = quality.paintEma < interval * 0.42 && late === 0
+    ? quality.stablePaints + 1 : 0;
+  if (now - quality.changedAt < 10_000) return;
+  const overloaded = quality.overloadPaints >= 90
+    || (quality.sampleCount === 120 && quality.lateCount > 18);
+  if (overloaded && quality.tier < 2) {
+    quality.tier = (quality.tier + 1) as QualityTier;
+  } else if (quality.stablePaints >= 360 && quality.tier > 0) {
+    quality.tier = (quality.tier - 1) as QualityTier;
+  } else {
+    return;
+  }
+  quality.changedAt = now;
+  resetQualityMeasurements(quality, now);
+}
+
+function updateQualityWeights(quality: AdaptiveQuality, elapsed: number) {
+  const profile = QUALITY_PROFILES[quality.tier];
+  const step = Math.max(elapsed, 0) / QUALITY_FADE_MS;
+  for (let band = 0; band < 4; band += 1) {
+    const rank = (band + 1) * 0.25;
+    const triangleTarget = rank <= profile.triangles ? 1 : 0;
+    const particleTarget = rank <= profile.particles ? 1 : 0;
+    quality.triangleWeights[band] += clamp(
+      triangleTarget - quality.triangleWeights[band], -step, step,
+    );
+    quality.particleWeights[band] += clamp(
+      particleTarget - quality.particleWeights[band], -step, step,
+    );
+  }
+}
+
+function qualityOpacity(rank: number, weights: Float64Array) {
+  return weights[Math.min(Math.floor(rank * 4), 3)];
+}
+
+function qualityRank(index: number, salt: number) {
+  let hash = (index ^ salt) >>> 0;
+  hash = Math.imul(hash ^ (hash >>> 16), 0x7feb352d);
+  hash = Math.imul(hash ^ (hash >>> 15), 0x846ca68b);
+  return ((hash ^ (hash >>> 16)) >>> 0) / 0x100000000;
+}
 
 type DeviceOrientationPermissionState =
   | 'unavailable'
@@ -2122,8 +2269,134 @@ function createForegroundTreesSprite() {
   return canvas;
 }
 
+// All radial interpolation happens once during prewarming, never in a frame.
+function createRadialWashSprite(
+  color: Rgb,
+  stops: readonly (readonly [number, number])[],
+  width = 256,
+  height = 256,
+  innerRadius = 0,
+) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d')!;
+  context.translate(width * 0.5, height * 0.5);
+  context.scale(width * 0.5, height * 0.5);
+  const gradient = context.createRadialGradient(0, 0, innerRadius, 0, 0, 1);
+  for (const [position, alpha] of stops) gradient.addColorStop(position, rgba(color, alpha));
+  context.fillStyle = gradient;
+  context.fillRect(-1, -1, 2, 2);
+  return canvas;
+}
+
+function createAtmosphericWashSprites(): AtmosphericWashSprites {
+  const white: Rgb = [255, 255, 255];
+  const sky = document.createElement('canvas');
+  sky.width = 1;
+  sky.height = 512;
+  const context = sky.getContext('2d', { alpha: false })!;
+  const gradient = context.createLinearGradient(0, 0, 0, sky.height);
+  gradient.addColorStop(0, '#d8ecfc');
+  gradient.addColorStop(0.44, '#eaf5fd');
+  gradient.addColorStop(0.76, '#f5f9fb');
+  gradient.addColorStop(1, '#fff5e8');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 1, sky.height);
+  const riverColor = mixRgb(RIVER_LIGHT_BLUE, SKY_CYAN, 0.58);
+  const sunStops = [[0, 0.038], [0.58, 0.012], [1, 0]] as const;
+  return {
+    sky,
+    riverBed: createRadialWashSprite(riverColor, [[0, 0.13], [0.48, 0.065], [0.82, 0.018], [1, 0]], 512, 256),
+    riverLobe: createRadialWashSprite(riverColor, [[0, 0.36], [0.42, 0.18], [0.76, 0.05], [1, 0]], 512, 256),
+    sunAccent: createRadialWashSprite(white, sunStops, 256, 256, 0.018 / (0.43 * 1.12)),
+    compactSunAccent: createRadialWashSprite(white, sunStops, 256, 256, 0.018 / (0.36 * 1.12)),
+    cyan: createRadialWashSprite(SKY_CYAN, [[0, 0.045], [1, 0]]),
+    lavender: createRadialWashSprite(SKY_LAVENDER, [[0, 0.055], [1, 0]]),
+    right: createRadialWashSprite(white, [[0, 0.11], [0.5, 0.045], [1, 0]]),
+    lowerRight: createRadialWashSprite(white, [[0, 0.052], [1, 0]]),
+    accent: createRadialWashSprite(white, [[0, 0.085], [0.48, 0.035], [1, 0]]),
+    edge: createRadialWashSprite(white, [[0, 0.06], [0.62, 0.02], [1, 0]]),
+    tint: createRadialWashSprite(white, [[0, 0.14], [0.48, 0.07], [0.78, 0.015], [1, 0]]),
+  };
+}
+
+function paintAtmosphericParticleCell(context: CanvasRenderingContext2D, index: number, color: Rgb) {
+  const x = index * 64 + 32;
+  context.clearRect(index * 64, 0, 64, 64);
+  context.fillStyle = rgba(color, 0.12);
+  context.beginPath();
+  context.arc(x, 32, 20, 0, TAU);
+  context.fill();
+  context.fillStyle = rgba(color, 0.38);
+  context.beginPath();
+  context.ellipse(x, 32, 5.2, 8, 0, 0, TAU);
+  context.fill();
+}
+
+function createAtmosphericParticleSprites(): AtmosphericParticleSprites {
+  const atlas = document.createElement('canvas');
+  atlas.width = 192;
+  atlas.height = 64;
+  const context = atlas.getContext('2d')!;
+  const tint = mixRgb(COOL_PARTICLE, DEFAULT_ACTIVE_COLOR, 0.18);
+  paintAtmosphericParticleCell(context, 0, WARM_PARTICLE);
+  paintAtmosphericParticleCell(context, 1, COOL_PARTICLE);
+  paintAtmosphericParticleCell(context, 2, tint);
+  return { atlas, context, tint };
+}
+
+function createCachedPlane(width: number, height: number, opaque = false): CachedPlane {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  return { canvas, context: canvas.getContext('2d', { alpha: !opaque })! };
+}
+
+function createFramePlanes(width: number, height: number): FramePlanes {
+  // Start at half resolution; also bound all three planes together so the
+  // retained sprites + viewport caches stay below the ~32 MiB light budget.
+  const scale = Math.min(0.5, 1024 / width, 640 / height, Math.sqrt(220_000 / (width * height)));
+  const bufferWidth = Math.max(1, Math.ceil(width * scale));
+  const bufferHeight = Math.max(1, Math.ceil(height * scale));
+  return {
+    sky: createCachedPlane(bufferWidth, bufferHeight, true),
+    edge: createCachedPlane(bufferWidth, bufferHeight),
+    tint: createCachedPlane(bufferWidth, bufferHeight),
+    tintScratch: createCachedPlane(256, 256),
+    color: [0, 0, 0], rightColor: [0, 0, 0], foregroundColor: [0, 0, 0],
+    cameraX: 0, cameraY: 0, valid: false,
+  };
+}
+
+function disposeFramePlanes(planes: FramePlanes | null) {
+  if (!planes) return;
+  // Release viewport-dependent raster resources immediately on unmount/resize.
+  planes.sky.canvas.width = planes.sky.canvas.height = 0;
+  planes.edge.canvas.width = planes.edge.canvas.height = 0;
+  planes.tint.canvas.width = planes.tint.canvas.height = 0;
+  planes.tintScratch.canvas.width = planes.tintScratch.canvas.height = 0;
+}
+
+function tintWash(mask: HTMLCanvasElement, color: Rgb, scratch: CachedPlane) {
+  const { context, canvas } = scratch;
+  context.globalCompositeOperation = 'copy';
+  context.fillStyle = rgba(color, 1);
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.globalCompositeOperation = 'destination-in';
+  context.drawImage(mask, 0, 0, canvas.width, canvas.height);
+  context.globalCompositeOperation = 'source-over';
+  return canvas;
+}
+
+function drawRadialWash(context: CanvasRenderingContext2D, sprite: HTMLCanvasElement, x: number, y: number, radius: number) {
+  context.drawImage(sprite, x - radius, y - radius, radius * 2, radius * 2);
+}
+
 function createAtmosphericSprites(): AtmosphericSprites {
   return {
+    washes: createAtmosphericWashSprites(),
+    particles: createAtmosphericParticleSprites(),
     clouds: {
       farA: createCloudSprite('far', 1051),
       farB: createCloudSprite('far', 2083),
@@ -2332,6 +2605,7 @@ function createParticles(width: number, height: number, compact: boolean) {
     const size = (compact ? 0.45 : 0.55) + random() * (compact ? 1.05 : 1.35);
     const depthMix = random();
     return {
+      qualityRank: qualityRank(index, 0x61a7),
       x,
       y,
       size,
@@ -2459,6 +2733,7 @@ function createRiverParticles(compact: boolean): RiverParticle[] {
     const spinDirection = random() < 0.5 ? -1 : 1;
     const fastTumble = random() < 0.15;
     return {
+      qualityRank: qualityRank(index, 0x92bf),
       phase: positiveModulo(random() + index / count, 1),
       speed: 4.5 + random() * 4.5,
       size: clamp(size, minimumSize, maximumSize),
@@ -2796,11 +3071,24 @@ function createScene(
 ): AtmosphericScene {
   const compact = width < 720 || height < 560;
   const shortSide = Math.min(width, height);
+  const motionScale = compact || coarsePointer ? 0.68 : 1;
   return {
     width,
     height,
     compact,
-    motionScale: compact || coarsePointer ? 0.68 : 1,
+    motionScale,
+    pixelRatio: 1,
+    parallax: {
+      positionX: 0, positionY: 0,
+      maximumOffsetX: clamp(width * 0.025, 15, 34) * motionScale,
+      maximumOffsetY: clamp(height * 0.019, 10, 22) * motionScale,
+      maximumPitch: 7 * DEGREE * motionScale,
+      maximumYaw: 10 * DEGREE * motionScale,
+      maximumPerspectiveScale: 0.05 * motionScale,
+      centerX: width * 0.5, centerY: height * 0.5,
+      inverseHalfWidth: 2 / Math.max(width, 1),
+      inverseHalfHeight: 2 / Math.max(height, 1), cursorNormalization: 1,
+    },
     sun: {
       x: width * 0.91,
       y: compact ? Math.max(height * 0.2, 120) : height * 0.17,
@@ -2854,20 +3142,11 @@ function createParallaxFrame(
 ): ParallaxFrame {
   const clampedX = clamp(positionX, -1, 1);
   const clampedY = clamp(positionY, -1, 1);
-  return {
-    positionX: clampedX,
-    positionY: clampedY,
-    maximumOffsetX: clamp(scene.width * 0.025, 15, 34) * scene.motionScale,
-    maximumOffsetY: clamp(scene.height * 0.019, 10, 22) * scene.motionScale,
-    maximumPitch: 7 * DEGREE * scene.motionScale,
-    maximumYaw: 10 * DEGREE * scene.motionScale,
-    maximumPerspectiveScale: 0.05 * scene.motionScale,
-    centerX: scene.width * 0.5,
-    centerY: scene.height * 0.5,
-    inverseHalfWidth: 2 / Math.max(scene.width, 1),
-    inverseHalfHeight: 2 / Math.max(scene.height, 1),
-    cursorNormalization: 1 / Math.max(1, Math.abs(clampedX) + Math.abs(clampedY)),
-  };
+  const frame = scene.parallax;
+  frame.positionX = clampedX;
+  frame.positionY = clampedY;
+  frame.cursorNormalization = 1 / Math.max(1, Math.abs(clampedX) + Math.abs(clampedY));
+  return frame;
 }
 
 function getParallaxOffsetX(parallax: ParallaxFrame, depth: number) {
@@ -2922,6 +3201,7 @@ function drawDepthImage(
   parallax: ParallaxFrame,
   rotation = 0,
 ) {
+  if (opacity <= 0.001) return;
   projectAtDepth(
     parallax,
     x,
@@ -2929,6 +3209,7 @@ function drawDepthImage(
     depthProfile,
     scene.projection,
   );
+  if (!isProjectedVisible(scene, width, height)) return;
   const response = clamp(depthProfile.tilt, 0, 1);
   const pitch = -parallax.positionY * parallax.maximumPitch * response;
   const yaw = parallax.positionX * parallax.maximumYaw * response;
@@ -2942,14 +3223,8 @@ function drawDepthImage(
   context.restore();
 }
 
-function drawSky(context: CanvasRenderingContext2D, scene: AtmosphericScene) {
-  const sky = context.createLinearGradient(0, 0, 0, scene.height);
-  sky.addColorStop(0, '#d8ecfc');
-  sky.addColorStop(0.44, '#eaf5fd');
-  sky.addColorStop(0.76, '#f5f9fb');
-  sky.addColorStop(1, '#fff5e8');
-  context.fillStyle = sky;
-  context.fillRect(0, 0, scene.width, scene.height);
+function drawSky(context: CanvasRenderingContext2D, scene: AtmosphericScene, sprite: HTMLCanvasElement) {
+  context.drawImage(sprite, 0, 0, scene.width, scene.height);
 }
 
 function drawAtmosphericWash(
@@ -2957,108 +3232,39 @@ function drawAtmosphericWash(
   scene: AtmosphericScene,
   activeColor: Rgb,
   parallax: ParallaxFrame,
+  washes: AtmosphericWashSprites,
+  planes: FramePlanes,
 ) {
   const shortSide = Math.min(scene.width, scene.height);
-  const rightGlowColor = mixRgb(RIGHT_GLOW_GOLD, activeColor, 0.3);
-  const rightGlowX = scene.width * 1.02
-    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  const rightGlowY = scene.height * 0.38
-    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  const rightGlowRadius = Math.max(scene.width * 0.6, scene.height * 0.72);
-  const rightGlow = context.createRadialGradient(
-    rightGlowX,
-    rightGlowY,
-    0,
-    rightGlowX,
-    rightGlowY,
-    rightGlowRadius,
-  );
-  rightGlow.addColorStop(0, rgba(rightGlowColor, 0.11));
-  rightGlow.addColorStop(0.5, rgba(rightGlowColor, 0.045));
-  rightGlow.addColorStop(1, rgba(rightGlowColor, 0));
-  context.fillStyle = rightGlow;
-  context.fillRect(0, 0, scene.width, scene.height);
-
-  const lowerRightX = scene.width * 0.98
-    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  const lowerRightY = scene.height * 0.94
-    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  const lowerRight = context.createRadialGradient(
-    lowerRightX,
-    lowerRightY,
-    0,
-    lowerRightX,
-    lowerRightY,
-    shortSide * 0.76,
-  );
-  lowerRight.addColorStop(0, rgba(rightGlowColor, 0.052));
-  lowerRight.addColorStop(1, rgba(rightGlowColor, 0));
-  context.fillStyle = lowerRight;
-  context.fillRect(0, 0, scene.width, scene.height);
-
-  const accentX = scene.width * 0.08
-    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.middleHaze.translation);
-  const accentY = scene.height * 0.69
-    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.middleHaze.translation);
-  const accent = context.createRadialGradient(accentX, accentY, 0, accentX, accentY, shortSide * 0.86);
-  accent.addColorStop(0, rgba(activeColor, 0.085));
-  accent.addColorStop(0.48, rgba(activeColor, 0.035));
-  accent.addColorStop(1, rgba(activeColor, 0));
-  context.fillStyle = accent;
-  context.fillRect(0, 0, scene.width, scene.height);
-
-  const coolX = scene.width * 0.72
-    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  const coolY = scene.height * 0.44
-    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  const cool = context.createRadialGradient(coolX, coolY, 0, coolX, coolY, shortSide * 0.72);
-  cool.addColorStop(0, rgba(SKY_LAVENDER, 0.055));
-  cool.addColorStop(1, rgba(SKY_LAVENDER, 0));
-  context.fillStyle = cool;
-  context.fillRect(0, 0, scene.width, scene.height);
+  const farX = getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  const farY = getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
+  mixRgbInto(RIGHT_GLOW_GOLD, activeColor, 0.3, planes.rightColor);
+  drawRadialWash(context, tintWash(washes.right, planes.rightColor, planes.tintScratch),
+    scene.width * 1.02 + farX, scene.height * 0.38 + farY,
+    Math.max(scene.width * 0.6, scene.height * 0.72));
+  drawRadialWash(context, tintWash(washes.lowerRight, planes.rightColor, planes.tintScratch),
+    scene.width * 0.98 + farX, scene.height * 0.94 + farY, shortSide * 0.76);
+  drawRadialWash(context, tintWash(washes.accent, activeColor, planes.tintScratch),
+    scene.width * 0.08 + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.middleHaze.translation),
+    scene.height * 0.69 + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.middleHaze.translation),
+    shortSide * 0.86);
+  drawRadialWash(context, washes.lavender,
+    scene.width * 0.72 + farX, scene.height * 0.44 + farY, shortSide * 0.72);
+  projectAtDepth(parallax, scene.sun.x, scene.sun.y, LIGHT_DEPTH_PROFILES.sun, scene.projection);
+  drawRadialWash(context,
+    tintWash(scene.compact ? washes.compactSunAccent : washes.sunAccent, activeColor, planes.tintScratch),
+    scene.projection.x, scene.projection.y, scene.sun.glowRadius * 1.12);
 }
 
 function drawSun(
   context: CanvasRenderingContext2D,
   scene: AtmosphericScene,
   sprites: AtmosphericSprites,
-  activeColor: Rgb,
   parallax: ParallaxFrame,
 ) {
-  projectAtDepth(
-    parallax,
-    scene.sun.x,
-    scene.sun.y,
-    LIGHT_DEPTH_PROFILES.sun,
-    scene.projection,
-  );
-  const accent = context.createRadialGradient(
-    scene.projection.x,
-    scene.projection.y,
-    scene.sun.radius,
-    scene.projection.x,
-    scene.projection.y,
-    scene.sun.glowRadius * 1.12,
-  );
-  accent.addColorStop(0, rgba(activeColor, 0.038));
-  accent.addColorStop(0.58, rgba(activeColor, 0.012));
-  accent.addColorStop(1, rgba(activeColor, 0));
-  context.fillStyle = accent;
-  context.fillRect(0, 0, scene.width, scene.height);
-
   const diameter = scene.sun.glowRadius * 2;
-  drawDepthImage(
-    context,
-    scene,
-    sprites.sun,
-    scene.sun.x,
-    scene.sun.y,
-    diameter,
-    diameter,
-    LIGHT_DEPTH_PROFILES.sun,
-    0.92,
-    parallax,
-  );
+  drawDepthImage(context, scene, sprites.sun, scene.sun.x, scene.sun.y,
+    diameter, diameter, LIGHT_DEPTH_PROFILES.sun, 0.92, parallax);
 }
 
 function drawHaze(
@@ -3133,35 +3339,14 @@ function drawForegroundGlowTint(
   scene: AtmosphericScene,
   activeColor: Rgb,
   parallax: ParallaxFrame,
+  washes: AtmosphericWashSprites,
+  planes: FramePlanes,
 ) {
-  const tintColor = mixRgb(FOREGROUND_GLOW_GOLD, activeColor, 0.34);
-
-  projectAtDepth(
-    parallax,
-    scene.width * 1.06,
-    scene.height * 0.8,
-    LIGHT_DEPTH_PROFILES.foregroundTrees,
-    scene.projection,
-  );
-  const radius = Math.max(scene.width * 0.72, scene.height * 0.78);
-  const tint = context.createRadialGradient(
-    scene.projection.x,
-    scene.projection.y,
-    0,
-    scene.projection.x,
-    scene.projection.y,
-    radius,
-  );
-  tint.addColorStop(0, rgba(tintColor, 0.14));
-  tint.addColorStop(0.48, rgba(tintColor, 0.07));
-  tint.addColorStop(0.78, rgba(tintColor, 0.015));
-  tint.addColorStop(1, rgba(tintColor, 0));
-
-  context.save();
-  context.globalCompositeOperation = 'color';
-  context.fillStyle = tint;
-  context.fillRect(0, 0, scene.width, scene.height);
-  context.restore();
+  mixRgbInto(FOREGROUND_GLOW_GOLD, activeColor, 0.34, planes.foregroundColor);
+  projectAtDepth(parallax, scene.width * 1.06, scene.height * 0.8,
+    LIGHT_DEPTH_PROFILES.foregroundTrees, scene.projection);
+  drawRadialWash(context, tintWash(washes.tint, planes.foregroundColor, planes.tintScratch),
+    scene.projection.x, scene.projection.y, Math.max(scene.width * 0.72, scene.height * 0.78));
 }
 
 function drawRiverGlow(
@@ -3169,84 +3354,77 @@ function drawRiverGlow(
   scene: AtmosphericScene,
   time: number,
   parallax: ParallaxFrame,
+  washes: AtmosphericWashSprites,
 ) {
   const centerY = scene.height * (scene.compact ? 0.92 : 0.91);
-  const riverGlowColor = mixRgb(RIVER_LIGHT_BLUE, SKY_CYAN, 0.58);
-  const lobes = scene.compact
-    ? COMPACT_RIVER_GLOW_LOBES
-    : DESKTOP_RIVER_GLOW_LOBES;
-
+  const lobes = scene.compact ? COMPACT_RIVER_GLOW_LOBES : DESKTOP_RIVER_GLOW_LOBES;
   context.save();
   context.beginPath();
   context.rect(0, 0, scene.width * RIVER_GLOW_FLOW_BOUNDARY_X, scene.height);
   context.clip();
-
-  projectAtDepth(
-    parallax,
-    scene.width * 0.33,
-    centerY,
-    LIGHT_DEPTH_PROFILES.riverGlow,
-    scene.projection,
-  );
-  context.save();
-  context.translate(scene.projection.x, scene.projection.y);
-  context.scale(
-    scene.width * 0.58,
-    scene.height * (scene.compact ? 0.064 : 0.058),
-  );
-  const riverBed = context.createRadialGradient(0, 0, 0, 0, 0, 1);
-  riverBed.addColorStop(0, rgba(riverGlowColor, 0.13 * scene.projection.alphaScale));
-  riverBed.addColorStop(0.48, rgba(riverGlowColor, 0.065 * scene.projection.alphaScale));
-  riverBed.addColorStop(0.82, rgba(riverGlowColor, 0.018 * scene.projection.alphaScale));
-  riverBed.addColorStop(1, rgba(riverGlowColor, 0));
-  context.fillStyle = riverBed;
-  context.fillRect(-1, -1, 2, 2);
-  context.restore();
-
+  projectAtDepth(parallax, scene.width * 0.33, centerY,
+    LIGHT_DEPTH_PROFILES.riverGlow, scene.projection);
+  const bedWidth = scene.width * 1.16;
+  const bedHeight = scene.height * (scene.compact ? 0.128 : 0.116);
+  context.globalAlpha = scene.projection.alphaScale;
+  context.drawImage(washes.riverBed, scene.projection.x - bedWidth * 0.5,
+    scene.projection.y - bedHeight * 0.5, bedWidth, bedHeight);
   for (const lobe of lobes) {
-    const flowDistance = Math.max(
-      (RIVER_GLOW_FLOW_BOUNDARY_X + lobe.halfWidth) * scene.width,
-      1,
-    );
-    const progress = positiveModulo(
-      lobe.phase + time * 0.001 * lobe.speed / flowDistance,
-      1,
-    );
-    const fadeIn = smoothstep(0, 0.16, progress);
-    const fadeOut = 1 - smoothstep(0.9, 1, progress);
-    const flowOpacity = lobe.opacity * fadeIn * fadeOut;
-    const centerX = -lobe.halfWidth
-      + (RIVER_GLOW_FLOW_BOUNDARY_X + lobe.halfWidth) * progress;
-
-    projectAtDepth(
-      parallax,
-      scene.width * centerX,
-      centerY + scene.height * lobe.verticalOffset,
-      LIGHT_DEPTH_PROFILES.riverGlow,
-      scene.projection,
-    );
-    context.save();
-    context.translate(scene.projection.x, scene.projection.y);
-    context.scale(scene.width * lobe.halfWidth, scene.height * lobe.halfHeight);
-    const glow = context.createRadialGradient(0, 0, 0, 0, 0, 1);
-    glow.addColorStop(
-      0,
-      rgba(riverGlowColor, 0.36 * flowOpacity * scene.projection.alphaScale),
-    );
-    glow.addColorStop(
-      0.42,
-      rgba(riverGlowColor, 0.18 * flowOpacity * scene.projection.alphaScale),
-    );
-    glow.addColorStop(
-      0.76,
-      rgba(riverGlowColor, 0.05 * flowOpacity * scene.projection.alphaScale),
-    );
-    glow.addColorStop(1, rgba(riverGlowColor, 0));
-    context.fillStyle = glow;
-    context.fillRect(-1, -1, 2, 2);
-    context.restore();
+    const flowDistance = Math.max((RIVER_GLOW_FLOW_BOUNDARY_X + lobe.halfWidth) * scene.width, 1);
+    const progress = positiveModulo(lobe.phase + time * 0.001 * lobe.speed / flowDistance, 1);
+    const flowOpacity = lobe.opacity * smoothstep(0, 0.16, progress) * (1 - smoothstep(0.9, 1, progress));
+    if (flowOpacity <= 0.001) continue;
+    const centerX = -lobe.halfWidth + (RIVER_GLOW_FLOW_BOUNDARY_X + lobe.halfWidth) * progress;
+    projectAtDepth(parallax, scene.width * centerX, centerY + scene.height * lobe.verticalOffset,
+      LIGHT_DEPTH_PROFILES.riverGlow, scene.projection);
+    const width = scene.width * lobe.halfWidth * 2;
+    const height = scene.height * lobe.halfHeight * 2;
+    if (!isProjectedVisible(scene, width, height)) continue;
+    context.globalAlpha = flowOpacity * scene.projection.alphaScale;
+    context.drawImage(washes.riverLobe, scene.projection.x - width * 0.5,
+      scene.projection.y - height * 0.5, width, height);
   }
   context.restore();
+}
+
+function mixRgbInto(a: Rgb, b: Rgb, amount: number, output: Rgb) {
+  for (let index = 0; index < 3; index += 1) {
+    output[index] = a[index] + (b[index] - a[index]) * amount;
+  }
+}
+
+function isProjectedVisible(scene: AtmosphericScene, width: number, height: number) {
+  // Conservative radius includes rotation and the small image-plane shear.
+  const radius = Math.hypot(width, height) * scene.projection.scale * 0.6;
+  return scene.projection.x + radius >= 0
+    && scene.projection.x - radius <= scene.width
+    && scene.projection.y + radius >= 0
+    && scene.projection.y - radius <= scene.height;
+}
+
+function setSpriteTransform(
+  context: CanvasRenderingContext2D,
+  scene: AtmosphericScene,
+  rotation: number,
+  pitch: number,
+  yaw: number,
+  scaleX: number,
+  scaleY: number,
+) {
+  // Compose DPR × translate × shear × rotate × scale without matrix objects.
+  const cosine = Math.cos(rotation);
+  const sine = Math.sin(rotation);
+  const shearX = Math.sin(yaw) * 0.085;
+  const shearY = Math.sin(pitch) * 0.11;
+  const dpr = scene.pixelRatio;
+  context.setTransform(
+    dpr * (cosine + shearX * sine) * scaleX,
+    dpr * (shearY * cosine + sine) * scaleX,
+    dpr * (-sine + shearX * cosine) * scaleY,
+    dpr * (-shearY * sine + cosine) * scaleY,
+    scene.projection.x * dpr,
+    scene.projection.y * dpr,
+  );
 }
 
 function getCloudX(scene: AtmosphericScene, cloud: Cloud, time: number) {
@@ -3406,6 +3584,7 @@ function drawRisingRiverGlows(
     const fadeIn = smoothstep(0, 0.12, progress);
     const fadeOut = 1 - smoothstep(0.55, 1, progress);
     const opacity = glow.opacity * fadeIn * fadeOut;
+    if (opacity <= 0.001) continue;
     const sway = Math.sin(
       progress * TAU * glow.swayCycles + glow.phase * TAU,
     ) * glow.sway * scene.motionScale;
@@ -3467,6 +3646,7 @@ function drawRisingRiverFragments(
   const colorCycleDuration = RISING_RIVER_FRAGMENT_COLOR_FADE_MS
     * RISING_RIVER_FRAGMENT_COLOR_POOL.length;
 
+  context.save();
   for (const fragment of scene.risingRiverFragments) {
     const progress = positiveModulo(fragment.phase + time / fragment.duration, 1);
     // A linear ascent keeps the vertical field evenly populated. The opacity
@@ -3551,11 +3731,8 @@ function drawRisingRiverFragments(
     const currentAlpha = finalOpacity * (1 - colorBlend)
       / Math.max(1 - nextAlpha, 0.001);
 
-    context.save();
-    context.translate(scene.projection.x, scene.projection.y);
-    context.transform(1, Math.sin(pitch) * 0.11, Math.sin(yaw) * 0.085, 1, 0, 0);
-    context.rotate(rotation + (yaw - pitch) * 0.025);
-    context.scale(
+    setSpriteTransform(
+      context, scene, rotation + (yaw - pitch) * 0.025, pitch, yaw,
       scene.projection.scale * geometricScale * aspectScale,
       scene.projection.scale * geometricScale,
     );
@@ -3602,8 +3779,8 @@ function drawRisingRiverFragments(
       destinationSize,
       nextAlpha,
     );
-    context.restore();
   }
+  context.restore();
 }
 
 function drawRiverParticles(
@@ -3612,6 +3789,7 @@ function drawRiverParticles(
   sprites: RiverParticleSprites,
   time: number,
   parallax: ParallaxFrame,
+  quality: AdaptiveQuality,
 ) {
   const entryMargin = 0.035;
   const travelSpan = RIVER_GLOW_FLOW_BOUNDARY_X + entryMargin * 2;
@@ -3625,6 +3803,8 @@ function drawRiverParticles(
   context.clip();
 
   for (const particle of scene.riverParticles) {
+    const qualityAlpha = qualityOpacity(particle.qualityRank, quality.triangleWeights);
+    if (qualityAlpha <= 0.001) continue;
     const progress = positiveModulo(
       particle.phase
         + time * 0.001 * particle.speed * scene.motionScale / flowDistance,
@@ -3651,6 +3831,9 @@ function drawRiverParticles(
     const verticalTaper = 0.68 + 0.32
       * smoothstep(0, 0.18, verticalProgress)
       * (1 - smoothstep(0.82, 1, verticalProgress));
+    const shimmer = 0.88 + Math.sin(time * 0.00072 + particle.driftPhase) * 0.12;
+    const opacity = particle.opacity * fadeIn * fadeOut * verticalTaper * shimmer * qualityAlpha;
+    if (opacity <= 0.001) continue;
 
     projectAtDepth(
       parallax,
@@ -3660,27 +3843,18 @@ function drawRiverParticles(
       scene.projection,
     );
 
-    const shimmer = 0.88 + Math.sin(time * 0.00072 + particle.driftPhase) * 0.12;
     const spriteScale = particle.spriteIndex === 1 ? 5.4 : particle.spriteIndex === 0 ? 4 : 3.8;
     const spriteSize = particle.size * spriteScale;
+    if (!isProjectedVisible(scene, spriteSize * particle.depthScale, spriteSize * particle.depthScale)) continue;
     const rotation = particle.rotation
       + time * 0.001 * particle.rotationSpeed * scene.motionScale
       + Math.sin(turbulenceTime * 0.7) * 0.12;
     const depthTilt = clamp(particle.depthProfile.tilt, 0, 1);
     const pitch = -parallax.positionY * parallax.maximumPitch * depthTilt;
     const yaw = parallax.positionX * parallax.maximumYaw * depthTilt;
-    context.save();
-    context.translate(scene.projection.x, scene.projection.y);
-    context.transform(1, Math.sin(pitch) * 0.11, Math.sin(yaw) * 0.085, 1, 0, 0);
-    context.rotate(rotation);
     const depthScale = scene.projection.scale * particle.depthScale;
-    context.scale(depthScale, depthScale);
-    context.globalAlpha = particle.opacity
-      * fadeIn
-      * fadeOut
-      * verticalTaper
-      * shimmer
-      * scene.projection.alphaScale;
+    setSpriteTransform(context, scene, rotation, pitch, yaw, depthScale, depthScale);
+    context.globalAlpha = opacity * scene.projection.alphaScale;
     context.drawImage(
       sprites[particle.spriteIndex],
       -spriteSize * 0.5,
@@ -3688,7 +3862,6 @@ function drawRiverParticles(
       spriteSize,
       spriteSize,
     );
-    context.restore();
   }
   context.restore();
 }
@@ -3697,41 +3870,33 @@ function drawParticles(
   context: CanvasRenderingContext2D,
   scene: AtmosphericScene,
   time: number,
-  activeColor: Rgb,
+  sprites: AtmosphericParticleSprites,
   parallax: ParallaxFrame,
+  quality: AdaptiveQuality,
 ) {
   const margin = 24;
   const span = scene.width + margin * 2;
+  context.save();
   for (const particle of scene.particles) {
+    const qualityAlpha = qualityOpacity(particle.qualityRank, quality.particleWeights);
+    if (qualityAlpha <= 0.001) continue;
     const x = -margin + positiveModulo(
       particle.x + margin + particle.speed * time * 0.001
-        + Math.sin(time * 0.00013 + particle.phase) * particle.drift,
-      span,
-    );
+        + Math.sin(time * 0.00013 + particle.phase) * particle.drift, span);
     const y = particle.y + Math.cos(time * 0.00011 + particle.phase) * particle.drift * 0.6;
-    projectAtDepth(
-      parallax,
-      x,
-      y,
-      particle.depthProfile,
-      scene.projection,
-    );
-    const shimmer = 0.68 + Math.sin(time * 0.0011 + particle.phase) * 0.2;
-    const baseColor = particle.colorIndex === 0
-      ? WARM_PARTICLE
-      : particle.colorIndex === 1
-        ? COOL_PARTICLE
-        : mixRgb(COOL_PARTICLE, activeColor, 0.18);
+    projectAtDepth(parallax, x, y, particle.depthProfile, scene.projection);
     const size = particle.size * scene.projection.scale;
-    context.fillStyle = rgba(baseColor, 0.12 * shimmer * scene.projection.alphaScale);
-    context.beginPath();
-    context.arc(scene.projection.x, scene.projection.y, size * 2.5, 0, TAU);
-    context.fill();
-    context.fillStyle = rgba(baseColor, 0.38 * shimmer * scene.projection.alphaScale);
-    context.beginPath();
-    context.ellipse(scene.projection.x, scene.projection.y, size * 0.65, size, 0, 0, TAU);
-    context.fill();
+    const spriteSize = size * 8;
+    if (!isProjectedVisible(scene, spriteSize, spriteSize)) continue;
+    const shimmer = 0.68 + Math.sin(time * 0.0011 + particle.phase) * 0.2;
+    const opacity = shimmer * scene.projection.alphaScale * qualityAlpha;
+    if (opacity <= 0.001) continue;
+    context.globalAlpha = opacity;
+    context.drawImage(sprites.atlas, particle.colorIndex * 64, 0, 64, 64,
+      scene.projection.x - spriteSize * 0.5, scene.projection.y - spriteSize * 0.5,
+      spriteSize, spriteSize);
   }
+  context.restore();
 }
 
 function drawEdgeGlow(
@@ -3739,33 +3904,66 @@ function drawEdgeGlow(
   scene: AtmosphericScene,
   activeColor: Rgb,
   parallax: ParallaxFrame,
+  washes: AtmosphericWashSprites,
+  planes: FramePlanes,
 ) {
   const shortSide = Math.min(scene.width, scene.height);
-  const x = getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.nearHaze.translation);
-  const y = scene.height
-    + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.nearHaze.translation);
-  const lower = context.createRadialGradient(x, y, 0, x, y, shortSide * 0.9);
-  lower.addColorStop(0, rgba(activeColor, 0.06));
-  lower.addColorStop(0.62, rgba(activeColor, 0.02));
-  lower.addColorStop(1, rgba(activeColor, 0));
-  context.fillStyle = lower;
-  context.fillRect(0, 0, scene.width, scene.height);
+  drawRadialWash(context, tintWash(washes.edge, activeColor, planes.tintScratch),
+    getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.nearHaze.translation),
+    scene.height + getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.nearHaze.translation),
+    shortSide * 0.9);
+  drawRadialWash(context, washes.cyan,
+    scene.width + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation),
+    getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation), shortSide * 0.72);
+}
 
-  const upperX = scene.width
-    + getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  const upperY = getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  const upper = context.createRadialGradient(
-    upperX,
-    upperY,
-    0,
-    upperX,
-    upperY,
-    shortSide * 0.72,
-  );
-  upper.addColorStop(0, rgba(SKY_CYAN, 0.045));
-  upper.addColorStop(1, rgba(SKY_CYAN, 0));
-  context.fillStyle = upper;
-  context.fillRect(0, 0, scene.width, scene.height);
+function preparePlane(plane: CachedPlane, scene: AtmosphericScene, clear: boolean) {
+  const { context, canvas } = plane;
+  context.setTransform(canvas.width / scene.width, 0, 0, canvas.height / scene.height, 0, 0);
+  context.globalAlpha = 1;
+  context.globalCompositeOperation = 'source-over';
+  if (clear) context.clearRect(0, 0, scene.width, scene.height);
+}
+
+function updateFramePlanes(
+  planes: FramePlanes,
+  scene: AtmosphericScene,
+  sprites: AtmosphericSprites,
+  activeColor: Rgb,
+  parallax: ParallaxFrame,
+) {
+  const colorChanged = !planes.valid
+    || planes.color[0] !== activeColor[0]
+    || planes.color[1] !== activeColor[1]
+    || planes.color[2] !== activeColor[2];
+  const cameraChanged = !planes.valid
+    || planes.cameraX !== parallax.positionX || planes.cameraY !== parallax.positionY;
+  if (!colorChanged && !cameraChanged) return;
+  preparePlane(planes.sky, scene, false);
+  drawSky(planes.sky.context, scene, sprites.washes.sky);
+  drawAtmosphericWash(planes.sky.context, scene, activeColor, parallax, sprites.washes, planes);
+  preparePlane(planes.edge, scene, true);
+  drawEdgeGlow(planes.edge.context, scene, activeColor, parallax, sprites.washes, planes);
+  preparePlane(planes.tint, scene, true);
+  drawForegroundGlowTint(planes.tint.context, scene, activeColor, parallax, sprites.washes, planes);
+  if (colorChanged) {
+    const particleTint = sprites.particles.tint;
+    const red = COOL_PARTICLE[0] + (activeColor[0] - COOL_PARTICLE[0]) * 0.18;
+    const green = COOL_PARTICLE[1] + (activeColor[1] - COOL_PARTICLE[1]) * 0.18;
+    const blue = COOL_PARTICLE[2] + (activeColor[2] - COOL_PARTICLE[2]) * 0.18;
+    if (particleTint[0] !== red || particleTint[1] !== green || particleTint[2] !== blue) {
+      particleTint[0] = red;
+      particleTint[1] = green;
+      particleTint[2] = blue;
+      paintAtmosphericParticleCell(sprites.particles.context, 2, particleTint);
+    }
+    planes.color[0] = activeColor[0];
+    planes.color[1] = activeColor[1];
+    planes.color[2] = activeColor[2];
+  }
+  planes.cameraX = parallax.positionX;
+  planes.cameraY = parallax.positionY;
+  planes.valid = true;
 }
 
 function drawScene(
@@ -3776,18 +3974,17 @@ function drawScene(
   activeColor: Rgb,
   reducedMotion: boolean,
   parallax: ParallaxFrame,
+  planes: FramePlanes,
+  quality: AdaptiveQuality,
 ) {
   const motionTime = reducedMotion ? 0 : time;
-  context.save();
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.clearRect(0, 0, context.canvas.width, context.canvas.height);
-  context.restore();
+  updateFramePlanes(planes, scene, sprites, activeColor, parallax);
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = 1;
-  drawSky(context, scene);
-  drawAtmosphericWash(context, scene, activeColor, parallax);
-  drawSun(context, scene, sprites, activeColor, parallax);
-  drawRiverGlow(context, scene, motionTime, parallax);
+  // The opaque sky replaces clearing; one CSS pixel of overscan covers DPR seams.
+  context.drawImage(planes.sky.canvas, -1, -1, scene.width + 2, scene.height + 2);
+  drawSun(context, scene, sprites, parallax);
+  drawRiverGlow(context, scene, motionTime, parallax, sprites.washes);
   drawHaze(context, scene, motionTime, 'far', parallax);
   drawClouds(context, scene, motionTime, 'far', parallax);
   drawDistantHills(context, scene, parallax);
@@ -3809,13 +4006,15 @@ function drawScene(
   );
   drawRisingRiverGlows(context, scene, sprites.risingRiverGlows, motionTime, parallax);
   drawRiverLightMotes(context, scene, sprites.riverLightMotes, motionTime, parallax);
-  drawRiverParticles(context, scene, sprites.riverParticles, motionTime, parallax);
-  drawParticles(context, scene, motionTime, activeColor, parallax);
+  drawRiverParticles(context, scene, sprites.riverParticles, motionTime, parallax, quality);
+  drawParticles(context, scene, motionTime, sprites.particles, parallax, quality);
   drawHaze(context, scene, motionTime, 'near', parallax);
   drawClouds(context, scene, motionTime, 'foreground', parallax);
-  drawEdgeGlow(context, scene, activeColor, parallax);
+  context.globalAlpha = 1;
+  context.drawImage(planes.edge.canvas, 0, 0, scene.width, scene.height);
   drawForegroundTrees(context, scene, parallax);
-  drawForegroundGlowTint(context, scene, activeColor, parallax);
+  context.globalCompositeOperation = 'color';
+  context.drawImage(planes.tint.canvas, 0, 0, scene.width, scene.height);
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
 }
@@ -3904,10 +4103,16 @@ export default function RenderLightMode({
       );
     let disposed = false;
     let scene: AtmosphericScene | null = null;
+    let planes: FramePlanes | null = null;
+    let sceneCoarsePointer = coarsePointer.matches;
+    const quality = createAdaptiveQuality(performance.now());
     let animationFrame = 0;
     let resizeFrame = 0;
     let resizePendingWhileHidden = false;
     let lastPaintTime = 0;
+    let lastDeliveredPaintTime = 0;
+    let previousAnimationTime = 0;
+    let refreshInterval = 1000 / 60;
     let previousTime = performance.now();
     let sceneTime = restoredSnapshot
       ? restoredSnapshot.sceneTimeMs + inactiveElapsed
@@ -4106,9 +4311,9 @@ export default function RenderLightMode({
 
     const updateColor = () => {
       const target = targetColorRef.current;
-      const targetChanged = target.some(
-        (channel, index) => Math.abs(channel - transitionTargetColor[index]) > 0.01,
-      );
+      const targetChanged = Math.abs(target[0] - transitionTargetColor[0]) > 0.01
+        || Math.abs(target[1] - transitionTargetColor[1]) > 0.01
+        || Math.abs(target[2] - transitionTargetColor[2]) > 0.01;
       if (targetChanged) {
         for (let index = 0; index < 3; index += 1) {
           transitionFromColor[index] = currentColor[index];
@@ -4132,8 +4337,8 @@ export default function RenderLightMode({
       }
     };
 
-    const paint = (time: number) => {
-      if (!scene || disposed || document.hidden) return;
+    const paint = (time: number, scheduledElapsed = 0, frameInterval = 0) => {
+      if (!scene || !planes || disposed || document.hidden) return;
       const elapsed = reducedMotion ? 0 : clamp(time - previousTime, 0, 64);
       previousTime = time;
       if (!reducedMotion) sceneTime += elapsed;
@@ -4148,7 +4353,11 @@ export default function RenderLightMode({
         const ease = 1 - Math.exp(-elapsed / PARALLAX_EASE_MS);
         currentParallaxX += (targetParallaxX - currentParallaxX) * ease;
         currentParallaxY += (targetParallaxY - currentParallaxY) * ease;
+        if (Math.abs(targetParallaxX - currentParallaxX) < 0.00001) currentParallaxX = targetParallaxX;
+        if (Math.abs(targetParallaxY - currentParallaxY) < 0.00001) currentParallaxY = targetParallaxY;
       }
+      if (!reducedMotion) updateQualityWeights(quality, elapsed);
+      const paintStart = performance.now();
       drawScene(
         context,
         scene,
@@ -4157,18 +4366,39 @@ export default function RenderLightMode({
         currentColor,
         reducedMotion,
         createParallaxFrame(scene, currentParallaxX, currentParallaxY),
+        planes,
+        quality,
       );
+      if (!reducedMotion && frameInterval > 0) {
+        recordQualityPaint(quality, time, performance.now() - paintStart, scheduledElapsed, frameInterval);
+      }
     };
 
     const animate = (time: number) => {
       if (disposed || reducedMotion || document.hidden) return;
-      const frameInterval = coarsePointer.matches || window.innerWidth < 720
-        ? 1000 / 30
-        : 1000 / 45;
+      const refreshElapsed = time - previousAnimationTime;
+      previousAnimationTime = time;
+      if (refreshElapsed >= 4 && refreshElapsed <= 25) {
+        refreshInterval += (refreshElapsed - refreshInterval) * 0.1;
+      }
+      const profile = QUALITY_PROFILES[quality.tier];
+      const frameInterval = 1000 / (coarsePointer.matches || window.innerWidth < 720
+        ? profile.mobileFps : profile.desktopFps);
       const sinceLastPaint = time - lastPaintTime;
-      if (sinceLastPaint >= frameInterval) {
-        lastPaintTime = time - (sinceLastPaint % frameInterval);
-        paint(time);
+      // A small tolerance avoids halving delivery at nominal 60 Hz due to
+      // fractional RAF timestamps. Keep the schedule phase, not paint duration.
+      if (lastPaintTime === 0 || sinceLastPaint >= frameInterval - 0.25) {
+        const deliveredElapsed = lastDeliveredPaintTime === 0
+          ? frameInterval : time - lastDeliveredPaintTime;
+        // Capped 45/27 FPS schedules naturally alternate vsync gaps. Discount
+        // one refresh of quantization rather than treating those gaps as load.
+        const scheduledElapsed = frameInterval + Math.max(
+          0, deliveredElapsed - frameInterval - refreshInterval,
+        );
+        lastPaintTime = lastPaintTime === 0 ? time
+          : lastPaintTime + Math.max(1, Math.floor((sinceLastPaint + 0.25) / frameInterval)) * frameInterval;
+        lastDeliveredPaintTime = time;
+        paint(time, scheduledElapsed, frameInterval);
       }
       animationFrame = window.requestAnimationFrame(animate);
     };
@@ -4178,6 +4408,8 @@ export default function RenderLightMode({
       animationFrame = 0;
       previousTime = performance.now();
       lastPaintTime = 0;
+      lastDeliveredPaintTime = 0;
+      previousAnimationTime = 0;
       if (disposed || document.hidden) return;
       if (reducedMotion) {
         paint(previousTime);
@@ -4199,12 +4431,29 @@ export default function RenderLightMode({
       const maxBackingPixels = coarsePointer.matches ? 3_000_000 : 6_000_000;
       const pixelBudgetRatio = Math.sqrt(maxBackingPixels / (width * height));
       const dpr = Math.min(window.devicePixelRatio || 1, dprLimit, pixelBudgetRatio);
-      canvas.width = Math.max(1, Math.round(width * dpr));
-      canvas.height = Math.max(1, Math.round(height * dpr));
+      const backingWidth = Math.max(1, Math.round(width * dpr));
+      const backingHeight = Math.max(1, Math.round(height * dpr));
+      const geometryChanged = !scene || scene.width !== width || scene.height !== height
+        || sceneCoarsePointer !== coarsePointer.matches;
+      const backingChanged = canvas.width !== backingWidth || canvas.height !== backingHeight
+        || scene?.pixelRatio !== dpr;
+      if (!geometryChanged && !backingChanged) return;
+      if (backingChanged) {
+        canvas.width = backingWidth;
+        canvas.height = backingHeight;
+      }
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.imageSmoothingEnabled = true;
       context.imageSmoothingQuality = 'high';
-      scene = createScene(width, height, coarsePointer.matches, sprites);
+      if (geometryChanged) {
+        disposeFramePlanes(planes);
+        planes = createFramePlanes(width, height);
+        scene = createScene(width, height, coarsePointer.matches, sprites);
+        sceneCoarsePointer = coarsePointer.matches;
+      }
+      if (scene) scene.pixelRatio = dpr;
+      resetQualityMeasurements(quality, performance.now());
+      lastPaintTime = lastDeliveredPaintTime = 0;
       paint(performance.now());
     };
 
@@ -4216,6 +4465,21 @@ export default function RenderLightMode({
       }
       window.cancelAnimationFrame(resizeFrame);
       resizeFrame = window.requestAnimationFrame(resize);
+    };
+
+    // ResizeObserver does not fire when only display density changes.
+    // Re-arm the exact-resolution query without retaining obsolete listeners.
+    let resolutionPreference = window.matchMedia(
+      `(resolution: ${window.devicePixelRatio || 1}dppx)`,
+    );
+    const handleResolutionChange = () => {
+      if (disposed) return;
+      resolutionPreference.removeEventListener('change', handleResolutionChange);
+      resolutionPreference = window.matchMedia(
+        `(resolution: ${window.devicePixelRatio || 1}dppx)`,
+      );
+      resolutionPreference.addEventListener('change', handleResolutionChange);
+      scheduleResize();
     };
 
     const resetParallax = () => {
@@ -4258,6 +4522,10 @@ export default function RenderLightMode({
 
     const handleMotionPreference = () => {
       reducedMotion = motionPreference.matches;
+      quality.tier = 0;
+      quality.triangleWeights.fill(1);
+      quality.particleWeights.fill(1);
+      resetQualityMeasurements(quality, performance.now());
       resetParallax();
       currentParallaxX = 0;
       currentParallaxY = 0;
@@ -4287,6 +4555,8 @@ export default function RenderLightMode({
       }
       previousTime = performance.now();
       lastPaintTime = 0;
+      lastDeliveredPaintTime = 0;
+      resetQualityMeasurements(quality, previousTime);
       const appliedPendingResize = resizePendingWhileHidden;
       if (appliedPendingResize) resize();
       configureDeviceTilt();
@@ -4308,8 +4578,10 @@ export default function RenderLightMode({
     motionPreference.addEventListener('change', handleMotionPreference);
     parallaxPointer.addEventListener('change', handleParallaxCapabilityChange);
     coarsePointer.addEventListener('change', handleCoarsePointerChange);
+    resolutionPreference.addEventListener('change', handleResolutionChange);
     window.screen.orientation?.addEventListener('change', handleScreenOrientationChange);
     window.addEventListener('orientationchange', handleScreenOrientationChange);
+    window.addEventListener('resize', scheduleResize, { passive: true });
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     window.addEventListener('blur', handleWindowBlur);
     document.documentElement.addEventListener('pointerleave', resetParallax);
@@ -4347,8 +4619,10 @@ export default function RenderLightMode({
       motionPreference.removeEventListener('change', handleMotionPreference);
       parallaxPointer.removeEventListener('change', handleParallaxCapabilityChange);
       coarsePointer.removeEventListener('change', handleCoarsePointerChange);
+      resolutionPreference.removeEventListener('change', handleResolutionChange);
       window.screen.orientation?.removeEventListener('change', handleScreenOrientationChange);
       window.removeEventListener('orientationchange', handleScreenOrientationChange);
+      window.removeEventListener('resize', scheduleResize);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('blur', handleWindowBlur);
       document.documentElement.removeEventListener('pointerleave', resetParallax);
@@ -4356,6 +4630,10 @@ export default function RenderLightMode({
       disarmTiltPermissionGesture();
       stopDeviceTilt();
       redrawStaticSceneRef.current = null;
+      disposeFramePlanes(planes);
+      planes = null;
+      scene = null;
+      canvas.width = canvas.height = 0;
     };
   }, [deviceOrientationSession, session]);
 
