@@ -7,7 +7,7 @@
 @property --active-ink {
   syntax: '<color>';
   inherits: true;
-  initial-value: #006792;
+  initial-value: #00557a;
 }
 
 #root {
@@ -668,7 +668,7 @@ html.background-view-active body {
   margin: 0 0 4px;
   color: color-mix(
     in srgb,
-    var(--section-heading-accent) 22%,
+    var(--section-heading-accent) 46%,
     var(--text-secondary)
   );
   font-size: clamp(1rem, 1.55vw, 1.12rem);
@@ -781,9 +781,13 @@ html.background-view-active body {
 .hero-summary {
   max-width: 640px;
   margin: 30px 0 0;
-  color: var(--about-ink);
+  color: color-mix(in srgb, var(--about-ink) 55%, var(--text-secondary));
   font-size: clamp(1.04rem, 1.55vw, 1.23rem);
   line-height: 1.72;
+}
+
+.dark .hero-summary {
+  color: var(--about-ink);
 }
 
 .hero-actions {
@@ -1155,25 +1159,25 @@ html.background-view-active body {
 .tech-list li[data-tone='cyan'] {
   --tech-bg: #cffafe;
   --tech-border: #67e8f9;
-  --tech-text: #0e7490;
+  --tech-text: #155e75;
 }
 
 .tech-list li[data-tone='green'] {
   --tech-bg: #dcfce7;
   --tech-border: #86efac;
-  --tech-text: #15803d;
+  --tech-text: #166534;
 }
 
 .tech-list li[data-tone='purple'] {
   --tech-bg: #f3e8ff;
   --tech-border: #d8b4fe;
-  --tech-text: #7e22ce;
+  --tech-text: #6b21a8;
 }
 
 .tech-list li[data-tone='amber'] {
   --tech-bg: #fef3c7;
   --tech-border: #fcd34d;
-  --tech-text: #a16207;
+  --tech-text: #854d0e;
 }
 
 .tech-list li[data-tone='red'] {
@@ -1185,25 +1189,25 @@ html.background-view-active body {
 .tech-list li[data-tone='neutral'] {
   --tech-bg: #f3f4f6;
   --tech-border: #d1d5db;
-  --tech-text: #374151;
+  --tech-text: #1f2937;
 }
 
 .tech-list li[data-tone='teal'] {
   --tech-bg: #ccfbf1;
   --tech-border: #5eead4;
-  --tech-text: #0f766e;
+  --tech-text: #115e59;
 }
 
 .tech-list li[data-tone='indigo'] {
   --tech-bg: #e0e7ff;
   --tech-border: #a5b4fc;
-  --tech-text: #4338ca;
+  --tech-text: #3730a3;
 }
 
 .tech-list li[data-tone='orange'] {
   --tech-bg: #ffedd5;
   --tech-border: #fdba74;
-  --tech-text: #c2410c;
+  --tech-text: #9a3412;
 }
 
 .dark .tech-list li[data-tone='blue'] {

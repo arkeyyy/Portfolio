@@ -29,20 +29,20 @@
   --education: #7f54ff;
   --contact: #e90ee6;
 
-  --about-ink: #006792;
-  --projects-ink: #805b00;
-  --skills-ink: #08754f;
-  --certifications-ink: #ad382e;
-  --education-ink: #6238d4;
-  --contact-ink: #a708a5;
+  --about-ink: #00557a;
+  --projects-ink: #854200;
+  --skills-ink: #035d3d;
+  --certifications-ink: #982215;
+  --education-ink: #4e22b0;
+  --contact-ink: #840b82;
 
   --page-bg: #e9edf7;
   --surface: rgba(249, 251, 255, 0.72);
   --surface-strong: #f9fbff;
   --surface-muted: rgba(226, 232, 245, 0.78);
   --text-primary: #11182b;
-  --text-secondary: #45516c;
-  --text-tertiary: #5f6b84;
+  --text-secondary: #273246;
+  --text-tertiary: #424e65;
   --border: rgba(17, 24, 43, 0.13);
   --border-strong: rgba(17, 24, 43, 0.23);
   --nav-bg: rgba(249, 251, 255, 0.74);
