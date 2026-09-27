@@ -861,6 +861,24 @@ html.background-view-active body {
   min-width: 0;
 }
 
+/* Keep small labels legible over the light scene's dark woodland. The backing
+   occupies no layout space and is absent from both dark mode and scene-only view. */
+html:not(.dark) .hero-metrics {
+  position: relative;
+  isolation: isolate;
+}
+
+html:not(.dark) .hero-metrics::before {
+  position: absolute;
+  z-index: -1;
+  inset: 14px -12px -12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(249, 251, 255, 0.88);
+  pointer-events: none;
+  content: "";
+}
+
 .hero-metrics dt {
   color: var(--text-primary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

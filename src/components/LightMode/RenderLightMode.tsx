@@ -471,13 +471,13 @@ type CloudSpec = {
 const DEFAULT_ACTIVE_COLOR: Rgb = [0, 175, 255];
 const SKY_CYAN: Rgb = [114, 199, 232];
 const FOREGROUND_FOG_CYAN: Rgb = [92, 196, 238];
-const SKY_LAVENDER: Rgb = [178, 166, 226];
+const SKY_LAVENDER: Rgb = [187, 179, 174];
 const RIVER_LIGHT_BLUE: Rgb = [157, 205, 214];
 const RIGHT_GLOW_GOLD: Rgb = [255, 235, 196];
 const FOREGROUND_GLOW_GOLD: Rgb = [239, 188, 128];
-const FOREGROUND_TREE_BLACK: Rgb = [46, 48, 46];
-const FOREGROUND_TREE_WARM_BLACK: Rgb = [209, 179, 141];
-const FOREGROUND_TREE_BACK: Rgb = [85, 89, 85];
+const FOREGROUND_TREE_BLACK: Rgb = [36, 38, 34];
+const FOREGROUND_TREE_WARM_BLACK: Rgb = [179, 150, 105];
+const FOREGROUND_TREE_BACK: Rgb = [98, 99, 92];
 const WARM_PARTICLE: Rgb = [255, 244, 220];
 const COOL_PARTICLE: Rgb = [225, 246, 255];
 const RIVER_LIGHT_MOTE_CELL_SIZE = 64;
@@ -676,7 +676,7 @@ function createCloudSprite(kind: CloudLayerKind, seed: number) {
     const x = width * (0.08 + progress * 0.84) + (random() - 0.5) * width * 0.1;
     const y = height * (isForeground ? 0.64 : 0.59) + (random() - 0.5) * height * 0.13;
     context.fillStyle = rgba(
-      index % 3 === 0 ? [162, 169, 218] as Rgb : [128, 181, 220] as Rgb,
+      index % 3 === 0 ? [177, 173, 174] as Rgb : [171, 185, 183] as Rgb,
       isFar ? 0.42 : 0.5,
     );
     context.beginPath();
@@ -705,7 +705,7 @@ function createCloudSprite(kind: CloudLayerKind, seed: number) {
       * (0.72 + random() * 0.75);
     const radiusY = height * (isFar ? 0.075 : isForeground ? 0.16 : 0.14)
       * (0.68 + random() * 0.72);
-    const tint = index % 3 === 0 ? [205, 229, 247] as Rgb : [255, 255, 255] as Rgb;
+    const tint = index % 3 === 0 ? [230, 230, 222] as Rgb : [255, 251, 238] as Rgb;
     context.fillStyle = rgba(tint, isFar ? 0.76 : 0.9);
     context.beginPath();
     context.ellipse(x, y, radiusX, radiusY, (random() - 0.5) * 0.18, 0, TAU);
@@ -1238,196 +1238,148 @@ function createRisingRiverGlowSprites(): RisingRiverGlowSprites {
 function createDistantHillSprite(kind: keyof DistantHillSprites) {
   const width = 1200;
   const height = 560;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  const canvas = createForestLayerCanvas(width, height);
   const context = canvas.getContext('2d');
   if (!context) return canvas;
+  const random = createSeededRandom(kind === 'far' ? 8573 : kind === 'middle' ? 9257 : 10103);
+  const isFar = kind === 'far';
+  const isNear = kind === 'near';
+  const ridge: ReadonlyArray<ForestSkylinePoint> = isFar
+    ? [[-0.04, 0.17], [0.04, 0.19], [0.13, 0.25], [0.2, 0.34],
+      [0.27, 0.47], [0.35, 0.53], [0.43, 0.58], [0.52, 0.66],
+      [0.64, 0.7], [0.77, 0.73], [1.04, 0.78]]
+    : isNear
+      ? [[-0.04, 0.35], [0.06, 0.39], [0.15, 0.49], [0.24, 0.53],
+        [0.33, 0.63], [0.43, 0.59], [0.51, 0.56], [0.59, 0.63],
+        [0.69, 0.71], [0.8, 0.7], [1.04, 0.76]]
+      : [[-0.04, 0.26], [0.05, 0.3], [0.13, 0.4], [0.24, 0.5],
+        [0.32, 0.52], [0.41, 0.64], [0.51, 0.69], [0.6, 0.64],
+        [0.71, 0.72], [0.85, 0.73], [1.04, 0.79]];
+  const topColor: Rgb = isFar ? [150, 140, 143] : isNear ? [129, 128, 124] : [143, 137, 139];
+  const bottomColor: Rgb = isFar ? [183, 181, 177] : isNear ? [158, 155, 147] : [168, 167, 162];
 
-  const profiles: Record<keyof DistantHillSprites, {
-    masses: ReadonlyArray<{
-      ridge: ReadonlyArray<readonly [number, number]>;
-      opacity: number;
-      lift: number;
-      blurScale: number;
-    }>;
-    highlight: Rgb;
-    shadow: Rgb;
-    blur: number;
-    fadeStart: number;
-  }> = {
-    far: {
-      masses: [
-        {
-          ridge: [
-            [0.5, 0.96], [0.58, 0.8], [0.67, 0.64], [0.76, 0.56],
-            [0.84, 0.58], [0.93, 0.68], [1.02, 0.83], [1.1, 0.96],
-          ],
-          opacity: 0.26,
-          lift: 0.52,
-          blurScale: 1.35,
-        },
-        {
-          ridge: [
-            [0.13, 0.96], [0.22, 0.76], [0.31, 0.61], [0.4, 0.53],
-            [0.49, 0.55], [0.59, 0.64], [0.69, 0.77], [0.79, 0.91],
-            [0.87, 0.97],
-          ],
-          opacity: 0.54,
-          lift: 0.28,
-          blurScale: 1.18,
-        },
-        {
-          ridge: [
-            [-0.154, 0.97], [-0.084, 0.57], [-0.004, 0.27], [0.076, 0.15],
-            [0.156, 0.17], [0.246, 0.25], [0.336, 0.41], [0.426, 0.6],
-            [0.526, 0.78], [0.626, 0.95], [0.716, 1.04],
-          ],
-          opacity: 1,
-          lift: 0,
-          blurScale: 1,
-        },
-      ],
-      highlight: [137, 138, 147],
-      shadow: [96, 105, 118],
-      blur: 12,
-      fadeStart: 0.58,
-    },
-    middle: {
-      masses: [
-        {
-          ridge: [
-            [0.57, 0.97], [0.65, 0.76], [0.74, 0.6], [0.83, 0.56],
-            [0.92, 0.64], [1.01, 0.79], [1.09, 0.96],
-          ],
-          opacity: 0.23,
-          lift: 0.56,
-          blurScale: 1.3,
-        },
-        {
-          ridge: [
-            [0.23, 0.97], [0.31, 0.71], [0.4, 0.52], [0.49, 0.45],
-            [0.58, 0.49], [0.67, 0.62], [0.76, 0.8], [0.85, 0.96],
-          ],
-          opacity: 0.56,
-          lift: 0.3,
-          blurScale: 1.15,
-        },
-        {
-          ridge: [
-            [-0.1, 0.94], [-0.02, 0.59], [0.07, 0.36], [0.15, 0.28],
-            [0.24, 0.32], [0.33, 0.44], [0.42, 0.62], [0.52, 0.8],
-            [0.62, 0.96],
-          ],
-          opacity: 0.9,
-          lift: 0.08,
-          blurScale: 1,
-        },
-      ],
-      highlight: [160, 160, 168],
-      shadow: [100, 112, 125],
-      blur: 8,
-      fadeStart: 0.66,
-    },
-    near: {
-      masses: [
-        {
-          ridge: [
-            [0.62, 0.97], [0.7, 0.77], [0.78, 0.62], [0.86, 0.59],
-            [0.94, 0.68], [1.02, 0.82], [1.09, 0.97],
-          ],
-          opacity: 0.2,
-          lift: 0.58,
-          blurScale: 1.28,
-        },
-        {
-          ridge: [
-            [0.24, 0.97], [0.32, 0.7], [0.41, 0.53], [0.5, 0.47],
-            [0.59, 0.52], [0.68, 0.66], [0.77, 0.83], [0.86, 0.97],
-          ],
-          opacity: 0.5,
-          lift: 0.32,
-          blurScale: 1.12,
-        },
-        {
-          ridge: [
-            [-0.1, 0.96], [-0.02, 0.67], [0.06, 0.47], [0.14, 0.39],
-            [0.22, 0.43], [0.31, 0.56], [0.4, 0.72], [0.5, 0.88],
-            [0.59, 0.97],
-          ],
-          opacity: 0.84,
-          lift: 0.1,
-          blurScale: 1,
-        },
-      ],
-      highlight: [145, 147, 155],
-      shadow: [84, 98, 111],
-      blur: 6,
-      fadeStart: 0.74,
-    },
-  };
-  const profile = profiles[kind];
+  // A continuous, irregular ridge instead of stacked circular hill masses.
+  // Tiny canopy marks and long, soft folds are baked into each distance plane.
+  context.beginPath();
+  context.moveTo(-12, height);
+  for (let x = -12; x <= width + 12; x += 3) {
+    const u = x / width;
+    const ripple = Math.sin(u * 87 + 0.8) * 0.0028
+      + Math.sin(u * 217) * 0.0018 + (random() - 0.5) * 0.003;
+    context.lineTo(x, height * (sampleForestSkyline(ridge, u) + ripple));
+  }
+  context.lineTo(width + 12, height);
+  context.closePath();
+  context.save();
+  context.clip();
+  const stone = context.createLinearGradient(0, 0, width * 0.24, height);
+  stone.addColorStop(0, rgba(topColor, 0.92));
+  stone.addColorStop(0.6, rgba(bottomColor, 0.9));
+  stone.addColorStop(1, rgba([213, 207, 194], 0.28));
+  context.fillStyle = stone;
+  context.fillRect(0, 0, width, height);
 
-  for (const mass of profile.masses) {
+  for (let fold = 0; fold < 18; fold += 1) {
+    const x = width * (random() * 0.84 - 0.08);
+    const y = height * sampleForestSkyline(ridge, x / width);
     context.save();
-    context.globalAlpha = mass.opacity;
-    context.filter = `blur(${profile.blur * mass.blurScale}px)`;
+    context.filter = 'blur(6px)';
+    context.fillStyle = rgba(fold % 3 === 0 ? [239, 231, 216] : [82, 89, 89], fold % 3 === 0 ? 0.1 : 0.045);
     context.beginPath();
-    const first = mass.ridge[0];
-    context.moveTo(first[0] * width, height + profile.blur * 2);
-    context.lineTo(first[0] * width, first[1] * height);
-    for (let index = 1; index < mass.ridge.length - 1; index += 1) {
-      const point = mass.ridge[index];
-      const next = mass.ridge[index + 1];
-      context.quadraticCurveTo(
-        point[0] * width,
-        point[1] * height,
-        (point[0] + next[0]) * width * 0.5,
-        (point[1] + next[1]) * height * 0.5,
-      );
-    }
-    const last = mass.ridge[mass.ridge.length - 1];
-    context.lineTo(last[0] * width, last[1] * height);
-    context.lineTo(last[0] * width, height + profile.blur * 2);
-    context.closePath();
-    const highlight = mixRgb(profile.highlight, [247, 247, 249], mass.lift);
-    const shadow = mixRgb(profile.shadow, [225, 226, 231], mass.lift);
-    const fill = context.createLinearGradient(0, height * 0.12, 0, height);
-    fill.addColorStop(0, rgba(highlight, 0.72));
-    fill.addColorStop(0.48, rgba(mixRgb(highlight, shadow, 0.58), 0.9));
-    fill.addColorStop(1, rgba(shadow, 0.96));
-    context.fillStyle = fill;
+    context.moveTo(x, y + 3);
+    context.bezierCurveTo(x + width * 0.08, y + height * 0.1,
+      x + width * 0.12, y + height * 0.35, x + width * 0.25, height);
+    context.lineTo(x + width * 0.32, height);
+    context.bezierCurveTo(x + width * 0.14, y + height * 0.27,
+      x + width * 0.12, y + height * 0.12, x + width * 0.025, y);
     context.fill();
     context.restore();
   }
-
-  context.save();
-  context.globalCompositeOperation = 'source-atop';
-  context.filter = `blur(${profile.blur * 2}px)`;
-  const random = createSeededRandom(kind === 'far' ? 8573 : kind === 'middle' ? 9257 : 10103);
-  for (let index = 0; index < 5; index += 1) {
-    const x = width * (0.12 + random() * 0.58);
-    const y = height * (0.4 + random() * 0.36);
-    const radius = width * (0.12 + random() * 0.1);
-    const mist = context.createRadialGradient(x, y, 0, x, y, radius);
-    mist.addColorStop(0, 'rgba(247,248,252,0.2)');
-    mist.addColorStop(1, 'rgba(247,248,252,0)');
-    context.fillStyle = mist;
-    context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  for (let mark = 0; mark < 2900; mark += 1) {
+    const x = random() * width;
+    const ridgeY = height * sampleForestSkyline(ridge, x / width);
+    const y = ridgeY + Math.pow(random(), 1.5) * (height - ridgeY);
+    const nearEdge = 1 - smoothstep(0, height * 0.45, y - ridgeY);
+    context.fillStyle = rgba(mark % 4 === 0 ? [244, 238, 223] : [77, 87, 85],
+      (0.012 + random() * 0.035) * (0.4 + nearEdge * 0.6));
+    context.beginPath();
+    context.ellipse(x, y, 0.6 + random() * 3.8, 0.5 + random() * 2.1, -0.5, 0, TAU);
+    context.fill();
+  }
+  for (let ribbon = 0; ribbon < 6; ribbon += 1) {
+    const y = height * (0.42 + ribbon * 0.084);
+    context.save();
+    context.filter = 'blur(9px)';
+    context.strokeStyle = rgba([238, 232, 220], 0.16 - ribbon * 0.014);
+    context.lineWidth = 7 + ribbon * 2;
+    context.beginPath();
+    context.moveTo(-20, y);
+    context.bezierCurveTo(width * 0.19, y - 22, width * 0.35, y + 54, width * 0.8, y + 30);
+    context.stroke();
+    context.restore();
   }
   context.restore();
 
   context.save();
   context.globalCompositeOperation = 'destination-in';
-  const rightFade = context.createLinearGradient(0, 0, width, 0);
-  rightFade.addColorStop(0, 'rgba(255,255,255,1)');
-  rightFade.addColorStop(profile.fadeStart, 'rgba(255,255,255,0.98)');
-  rightFade.addColorStop(0.86, 'rgba(255,255,255,0.28)');
-  rightFade.addColorStop(1, 'rgba(255,255,255,0)');
-  context.fillStyle = rightFade;
+  const dissolve = context.createLinearGradient(0, 0, width, 0);
+  dissolve.addColorStop(0, 'rgba(255,255,255,1)');
+  dissolve.addColorStop(0.38, 'rgba(255,255,255,0.84)');
+  dissolve.addColorStop(0.67, 'rgba(255,255,255,0.28)');
+  dissolve.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = dissolve;
   context.fillRect(0, 0, width, height);
   context.restore();
-  return canvas;
+
+  if (isFar) {
+    // Sun-bleached escarpment: a quiet counterweight to the left valley.
+    context.save();
+    context.beginPath();
+    context.moveTo(width, height * 0.02);
+    context.lineTo(width * 0.91, height * 0.065);
+    context.lineTo(width * 0.8, height * 0.09);
+    context.lineTo(width * 0.758, height * 0.12);
+    context.lineTo(width * 0.746, height * 0.15);
+    context.lineTo(width * 0.756, height * 0.177);
+    context.lineTo(width * 0.81, height * 0.19);
+    context.lineTo(width * 0.827, height * 0.27);
+    context.lineTo(width * 0.805, height * 0.32);
+    context.lineTo(width * 0.85, height * 0.34);
+    context.lineTo(width * 0.8, height * 0.39);
+    context.lineTo(width * 0.73, height * 0.47);
+    context.lineTo(width * 0.65, height * 0.54);
+    context.lineTo(width * 0.63, height);
+    context.lineTo(width, height);
+    context.closePath();
+    context.clip();
+    const cliff = context.createLinearGradient(0, 0, 0, height * 0.85);
+    cliff.addColorStop(0, 'rgba(182,164,127,0.18)');
+    cliff.addColorStop(0.38, 'rgba(187,171,141,0.09)');
+    cliff.addColorStop(1, 'rgba(220,207,180,0)');
+    context.fillStyle = cliff;
+    context.fillRect(0, 0, width, height);
+    for (let seam = 0; seam < 22; seam += 1) {
+      const y = height * (0.12 + seam * 0.031);
+      context.strokeStyle = 'rgba(149,138,114,0.035)';
+      context.lineWidth = 0.5 + random() * 1.5;
+      context.beginPath();
+      context.moveTo(width * (0.7 + random() * 0.1), y);
+      context.bezierCurveTo(width * 0.86, y + 4, width * 0.91, y - 12, width, y - 18);
+      context.stroke();
+    }
+    context.restore();
+  }
+  // Atmospheric softness belongs in the cached art, not in a frame filter.
+  const softened = createForestLayerCanvas(width, height);
+  const softenedContext = softened.getContext('2d');
+  if (!softenedContext) {
+    softened.width = softened.height = 0;
+    return canvas;
+  }
+  softenedContext.filter = isFar ? 'blur(3px)' : isNear ? 'blur(1.2px)' : 'blur(2px)';
+  softenedContext.drawImage(canvas, 0, 0);
+  canvas.width = canvas.height = 0;
+  return softened;
 }
 
 type ForestFoliageZone = Readonly<{
@@ -1510,7 +1462,7 @@ function createFoliageBrush(seed: number) {
   if (!context) return canvas;
   const random = createSeededRandom(seed);
 
-  drawOrganicFoliageShape(context, width * 0.5, height * 0.54, 31, 22, random, 0.62);
+  drawOrganicFoliageShape(context, width * 0.5, height * 0.54, 31, 22, random, 0.9);
   for (let index = 0; index < 52; index += 1) {
     const angle = random() * TAU;
     const distance = Math.pow(random(), 0.82);
@@ -1521,7 +1473,7 @@ function createFoliageBrush(seed: number) {
       5 + random() * 13,
       3 + random() * 8,
       random,
-      0.2 + random() * 0.42,
+      0.35 + random() * 0.45,
     );
   }
 
@@ -1534,7 +1486,7 @@ function createFoliageBrush(seed: number) {
       2.5 + random() * 6,
       1.5 + random() * 4,
       random,
-      0.12 + random() * 0.3,
+      0.18 + random() * 0.34,
     );
   }
   return canvas;
@@ -1613,78 +1565,53 @@ function createPineBrush(seed: number) {
   const context = canvas.getContext('2d');
   if (!context) return canvas;
   const random = createSeededRandom(seed);
-  const lean = (random() - 0.5) * width * 0.07;
-
-  context.fillStyle = 'rgba(255,255,255,0.38)';
+  const lean = (random() - 0.5) * width * 0.12;
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.strokeStyle = 'rgba(255,255,255,0.88)';
+  context.lineWidth = 2.2;
   context.beginPath();
-  context.moveTo(width * 0.5 + lean, height * 0.025);
-  context.lineTo(width * 0.525, height * 0.99);
-  context.lineTo(width * 0.475, height * 0.99);
-  context.closePath();
-  context.fill();
+  context.moveTo(width * 0.49, height);
+  context.quadraticCurveTo(width * 0.51, height * 0.45, width * 0.5 + lean, height * 0.025);
+  context.stroke();
 
-  const branchCount = 48;
-  for (let index = 0; index < branchCount; index += 1) {
-    const progress = 0.035 + index / (branchCount - 1) * 0.92;
+  const branchCount = 34;
+  for (let tier = 0; tier < branchCount; tier += 1) {
+    const progress = 0.025 + (tier + random() * 0.7) / branchCount * 0.91;
     const spineX = width * 0.5 + lean * (1 - progress);
     const y = height * progress;
-    const halfWidth = width * (0.022 + Math.pow(progress, 0.8) * 0.43);
-    const leftReach = halfWidth * (0.76 + random() * 0.24);
-    const rightReach = halfWidth * (0.76 + random() * 0.24);
-    const thickness = height * (0.013 + progress * 0.019) * (0.88 + random() * 0.28);
-    const droop = height * (0.004 + progress * 0.014);
-    context.fillStyle = `rgba(255,255,255,${0.62 + random() * 0.28})`;
-    context.beginPath();
-    context.moveTo(spineX, y - thickness * 0.8);
-    context.quadraticCurveTo(
-      spineX + rightReach * 0.42,
-      y - thickness * 0.42,
-      spineX + rightReach,
-      y + droop,
-    );
-    context.quadraticCurveTo(
-      spineX + rightReach * 0.54,
-      y + thickness * 1.25 + droop,
-      spineX,
-      y + thickness * 0.88,
-    );
-    context.quadraticCurveTo(
-      spineX - leftReach * 0.54,
-      y + thickness * 1.2 + droop,
-      spineX - leftReach,
-      y + droop * 0.82,
-    );
-    context.quadraticCurveTo(
-      spineX - leftReach * 0.42,
-      y - thickness * 0.4,
-      spineX,
-      y - thickness * 0.8,
-    );
-    context.closePath();
-    context.fill();
-
-    if (index > 4 && index % 2 === 0) {
-      const clusterY = y + thickness * (0.15 + random() * 0.3);
-      drawOrganicFoliageShape(
-        context,
-        spineX + (random() - 0.5) * halfWidth * 0.55,
-        clusterY,
-        halfWidth * (0.24 + random() * 0.22),
-        thickness * (0.7 + random() * 0.55),
-        random,
-        0.36 + random() * 0.28,
-      );
+    const envelope = width * (0.018 + Math.pow(progress, 0.72) * 0.44);
+    for (const side of [-1, 1]) {
+      const reach = envelope * (0.72 + random() * 0.28);
+      const tipY = y + height * (0.015 + progress * 0.012) * (0.25 + random());
+      context.strokeStyle = 'rgba(255,255,255,0.86)';
+      context.lineWidth = 0.8 + progress * 2.5;
+      context.beginPath();
+      context.moveTo(spineX, y - 1);
+      context.quadraticCurveTo(spineX + side * reach * 0.48, y + 5, spineX + side * reach, tipY);
+      context.stroke();
+      const clusters = 3 + Math.floor(progress * 5);
+      for (let cluster = 0; cluster < clusters; cluster += 1) {
+        const t = (cluster + 0.35 + random() * 0.5) / clusters;
+        const x = spineX + side * reach * t;
+        const cy = y + (tipY - y) * t + (random() - 0.5) * 7;
+        const radiusX = (5 + progress * 10) * (0.65 + random() * 0.65);
+        const radiusY = (3 + progress * 9) * (0.65 + random() * 0.5);
+        drawOrganicFoliageShape(context, x, cy, radiusX, radiusY, random, 0.65 + random() * 0.32);
+        // Fine sprays break up each branch edge without repeating a sawtooth.
+        context.strokeStyle = 'rgba(255,255,255,0.72)';
+        context.lineWidth = 0.65;
+        for (let needle = 0; needle < 5; needle += 1) {
+          const nx = x + (random() - 0.5) * radiusX * 1.5;
+          const ny = cy + (random() - 0.5) * radiusY;
+          context.beginPath();
+          context.moveTo(nx - side * 2, ny + 2);
+          context.lineTo(nx + side * (2 + random() * 5), ny - 2 - random() * 5);
+          context.stroke();
+        }
+      }
     }
   }
-  drawOrganicFoliageShape(
-    context,
-    width * 0.5 + lean,
-    height * 0.035,
-    width * 0.025,
-    height * 0.03,
-    random,
-    0.82,
-  );
   return canvas;
 }
 
@@ -1723,7 +1650,7 @@ function createPineForestBand(
     return {
       x,
       top,
-      width: height * (0.105 + random() * 0.052),
+      width: height * (0.135 + random() * 0.078),
       height,
       opacity: minimumOpacity + random() * (maximumOpacity - minimumOpacity),
       variant: Math.floor(random() * 3),
@@ -1748,18 +1675,21 @@ function drawForestCanopyUnderlay(
       const mix = index / sampleCount;
       const easedMix = mix * mix * (3 - 2 * mix);
       const x = start[0] + (end[0] - start[0]) * mix;
-      const baseY = start[1] + (end[1] - start[1]) * easedMix;
+      // Keep the opaque forest floor beneath the crown silhouettes. It must
+      // never become a smooth hill-shaped edge in front of the tree branches.
+      const baseY = start[1] + (end[1] - start[1]) * easedMix + 0.11;
       const ripple = Math.sin(x * 79) * 0.007 + Math.sin(x * 191 + 1.7) * 0.004;
       samples.push([x, baseY + ripple + (random() - 0.5) * 0.012]);
     }
   }
-  samples.push(skyline[skyline.length - 1]);
+  const lastPoint = skyline[skyline.length - 1];
+  samples.push([lastPoint[0], lastPoint[1] + 0.11]);
 
   context.save();
   const underlay = context.createLinearGradient(0, height * 0.18, 0, height);
-  underlay.addColorStop(0, 'rgba(255,255,255,0.12)');
-  underlay.addColorStop(0.55, 'rgba(255,255,255,0.2)');
-  underlay.addColorStop(1, 'rgba(255,255,255,0.14)');
+  underlay.addColorStop(0, 'rgba(255,255,255,0.68)');
+  underlay.addColorStop(0.55, 'rgba(255,255,255,0.92)');
+  underlay.addColorStop(1, 'rgba(255,255,255,1)');
   context.fillStyle = underlay;
   context.beginPath();
   context.moveTo(samples[0][0] * width, samples[0][1] * height);
@@ -2010,262 +1940,131 @@ function carveForestMist(
 function createForegroundTreesSprite() {
   const width = 1800;
   const height = 680;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  const canvas = createForestLayerCanvas(width, height);
   const context = canvas.getContext('2d');
   if (!context) return canvas;
   const foliageBrushes = [1109, 2027, 4093, 6029].map(createFoliageBrush);
   const pineBrushes = [3011, 5021, 7013].map(createPineBrush);
-  const mistPalette: ReadonlyArray<ForestPaletteStop> = [
-    { offset: 0, color: [116, 122, 118] },
-    { offset: 0.58, color: [142, 137, 128] },
-    { offset: 1, color: [207, 179, 142] },
-  ];
-  const backPalette: ReadonlyArray<ForestPaletteStop> = [
-    { offset: 0, color: FOREGROUND_TREE_BACK },
-    { offset: 0.58, color: [100, 99, 94] },
-    { offset: 1, color: [184, 154, 119] },
-  ];
-  const middlePalette: ReadonlyArray<ForestPaletteStop> = [
-    { offset: 0, color: [55, 59, 56] },
-    { offset: 0.56, color: [81, 76, 71] },
-    { offset: 1, color: [166, 132, 98] },
-  ];
-  const frontPalette: ReadonlyArray<ForestPaletteStop> = [
-    { offset: 0, color: FOREGROUND_TREE_BLACK },
-    { offset: 0.28, color: [54, 55, 51] },
-    { offset: 0.52, color: [85, 77, 73] },
-    { offset: 0.7, color: [128, 108, 95] },
-    { offset: 0.86, color: [179, 154, 125] },
-    { offset: 1, color: FOREGROUND_TREE_WARM_BLACK },
-  ];
-  const frontSkyline: ReadonlyArray<ForestSkylinePoint> = [
-    [-0.03, 0.21], [0.05, 0.18], [0.12, 0.21], [0.2, 0.29],
-    [0.25, 0.37], [0.29, 0.5], [0.32, 0.54], [0.37, 0.5],
-    [0.4, 0.45], [0.49, 0.43], [0.57, 0.42], [0.65, 0.37],
-    [0.73, 0.33], [0.8, 0.31], [0.88, 0.36], [0.96, 0.31],
-    [1.03, 0.35],
-  ];
-  const middleSkyline: ReadonlyArray<ForestSkylinePoint> = [
-    [-0.04, 0.19], [0.04, 0.15], [0.13, 0.2], [0.21, 0.27],
-    [0.28, 0.42], [0.35, 0.47], [0.41, 0.29], [0.48, 0.37],
-    [0.56, 0.34], [0.64, 0.3], [0.72, 0.25], [0.79, 0.28],
-    [0.87, 0.3], [0.94, 0.26], [1.04, 0.32],
-  ];
-  const backSkyline: ReadonlyArray<ForestSkylinePoint> = [
-    [-0.04, 0.14], [0.07, 0.18], [0.15, 0.22], [0.23, 0.3],
-    [0.3, 0.39], [0.38, 0.35], [0.45, 0.23], [0.52, 0.31],
-    [0.61, 0.26], [0.69, 0.22], [0.77, 0.2], [0.85, 0.27],
-    [0.93, 0.21], [1.04, 0.28],
-  ];
-  const mistSkyline: ReadonlyArray<ForestSkylinePoint> = [
-    [-0.05, 0.11], [0.05, 0.13], [0.13, 0.17], [0.2, 0.24],
-    [0.29, 0.34], [0.36, 0.3], [0.43, 0.19], [0.5, 0.27],
-    [0.58, 0.22], [0.67, 0.18], [0.75, 0.16], [0.83, 0.22],
-    [0.91, 0.17], [1.05, 0.24],
-  ];
 
-  const mistLayer = createForestLayer(
-    width,
-    height,
-    10037,
-    foliageBrushes,
-    pineBrushes,
-    [
-      { start: -0.06, end: 0.23, topStart: 0.13, topEnd: 0.28, baseY: 0.73, count: 58, minimumWidth: 0.008, maximumWidth: 0.022 },
-      { start: 0.2, end: 0.47, topStart: 0.28, topEnd: 0.24, baseY: 0.73, count: 48, minimumWidth: 0.008, maximumWidth: 0.021 },
-      { start: 0.43, end: 0.72, topStart: 0.24, topEnd: 0.2, baseY: 0.73, count: 52, minimumWidth: 0.008, maximumWidth: 0.021 },
-      { start: 0.68, end: 1.06, topStart: 0.2, topEnd: 0.27, baseY: 0.73, count: 66, minimumWidth: 0.008, maximumWidth: 0.022 },
-    ],
-    [
-      ...createPineForestBand(11213, 18, mistSkyline, 0.73, 0.3, 0.5),
-      { x: 0.12, top: 0.22, width: 0.035, height: 0.32, opacity: 0.52, variant: 1 },
-      { x: 0.36, top: 0.25, width: 0.032, height: 0.3, opacity: 0.48, variant: 2 },
-      { x: 0.69, top: 0.17, width: 0.04, height: 0.36, opacity: 0.54, variant: 0 },
-      { x: 0.91, top: 0.2, width: 0.037, height: 0.33, opacity: 0.48, variant: 2 },
-    ],
-    mistPalette,
-    0.73,
-    mistSkyline,
-  );
-  const mistLayerContext = mistLayer.getContext('2d');
-  if (mistLayerContext) {
-    carveForestMist(mistLayerContext, width, height, 0.2, 0.48, 0.07, 0.11, 0.16);
-    carveForestMist(mistLayerContext, width, height, 0.48, 0.44, 0.08, 0.12, 0.18);
-    carveForestMist(mistLayerContext, width, height, 0.79, 0.4, 0.09, 0.13, 0.16);
+  // Valley-shaped silhouettes keep a real opening above the river. Broad
+  // woodland and a few legible conifers establish scale; smaller trees merge
+  // into each bank. Each plane is rasterized and released during prewarming.
+  const skylines: ReadonlyArray<ReadonlyArray<ForestSkylinePoint>> = [
+    [[-0.05, 0.09], [0.06, 0.12], [0.16, 0.3], [0.25, 0.42],
+      [0.32, 0.56], [0.39, 0.51], [0.46, 0.39], [0.56, 0.4],
+      [0.66, 0.28], [0.77, 0.25], [0.87, 0.3], [1.05, 0.24]],
+    [[-0.05, 0.13], [0.07, 0.19], [0.17, 0.35], [0.24, 0.42],
+      [0.31, 0.62], [0.38, 0.57], [0.45, 0.43], [0.53, 0.49],
+      [0.63, 0.36], [0.72, 0.33], [0.85, 0.43], [1.05, 0.39]],
+    [[-0.05, 0.13], [0.05, 0.2], [0.13, 0.29], [0.19, 0.46],
+      [0.235, 0.39], [0.28, 0.63], [0.34, 0.69], [0.395, 0.63],
+      [0.455, 0.51], [0.53, 0.61], [0.6, 0.49], [0.7, 0.44],
+      [0.8, 0.58], [0.91, 0.49], [1.05, 0.51]],
+    [[-0.05, 0.09], [0.025, 0.14], [0.1, 0.24], [0.165, 0.4],
+      [0.2, 0.5], [0.245, 0.46], [0.29, 0.67], [0.34, 0.72],
+      [0.39, 0.67], [0.445, 0.6], [0.52, 0.66], [0.575, 0.52],
+      [0.65, 0.66], [0.72, 0.56], [0.79, 0.62], [0.88, 0.63], [1.05, 0.56]],
+  ];
+  const palettes: ReadonlyArray<ReadonlyArray<ForestPaletteStop>> = [
+    [{ offset: 0, color: [114, 119, 112] }, { offset: 0.5, color: [156, 145, 131] },
+      { offset: 1, color: [210, 187, 146] }],
+    [{ offset: 0, color: FOREGROUND_TREE_BACK }, { offset: 0.46, color: [107, 104, 92] },
+      { offset: 1, color: [191, 164, 124] }],
+    [{ offset: 0, color: [51, 53, 48] }, { offset: 0.35, color: [67, 66, 58] },
+      { offset: 0.6, color: [117, 104, 87] }, { offset: 1, color: [186, 157, 116] }],
+    [{ offset: 0, color: FOREGROUND_TREE_BLACK }, { offset: 0.26, color: [44, 45, 38] },
+      { offset: 0.48, color: [64, 63, 50] }, { offset: 0.69, color: [121, 103, 80] },
+      { offset: 1, color: FOREGROUND_TREE_WARM_BLACK }],
+  ];
+  const heroPines: ForestPineAnchor[] = [
+    { x: 0.238, top: 0.37, width: 0.045, height: 0.38, opacity: 0.93, variant: 2, rotation: -0.035 },
+    { x: 0.435, top: 0.11, width: 0.082, height: 0.72, opacity: 1, variant: 1, rotation: 0.012 },
+    { x: 0.413, top: 0.35, width: 0.042, height: 0.42, opacity: 0.92, variant: 0, rotation: -0.018 },
+    { x: 0.485, top: 0.43, width: 0.047, height: 0.35, opacity: 0.87, variant: 2 },
+    { x: 0.61, top: 0.42, width: 0.048, height: 0.45, opacity: 0.87, variant: 0 },
+    { x: 0.787, top: 0.22, width: 0.072, height: 0.65, opacity: 0.89, variant: 2, rotation: -0.025 },
+    { x: 0.933, top: 0.32, width: 0.063, height: 0.61, opacity: 0.77, variant: 0 },
+  ];
+  for (let plane = 0; plane < 4; plane += 1) {
+    const skyline = skylines[plane];
+    const random = createSeededRandom(12037 + plane * 2029);
+    const zones: ForestFoliageZone[] = [
+      { start: -0.07, end: 0.28, topStart: 0.12, topEnd: 0.51, baseY: 0.82, count: 86, minimumWidth: 0.012, maximumWidth: 0.032 },
+      { start: 0.27, end: 0.56, topStart: 0.69, topEnd: 0.62, baseY: 0.94, count: 64, minimumWidth: 0.01, maximumWidth: 0.025 },
+      { start: 0.55, end: 1.07, topStart: 0.5, topEnd: 0.46, baseY: 0.91, count: 110, minimumWidth: 0.012, maximumWidth: 0.035 },
+    ];
+    // The river clearing is left open across all four banks.
+    const pines = createPineForestBand(13217 + plane * 2111,
+      plane === 0 ? 32 : plane === 1 ? 27 : 19, skyline, 0.94, 0.65, 0.98).map((pine) => {
+      const clearing = smoothstep(0.25, 0.31, pine.x) * (1 - smoothstep(0.35, 0.4, pine.x));
+      const oldTop = pine.top;
+      const top = Math.max(pine.top, 0.57 + plane * 0.038);
+      const nextTop = oldTop + (top - oldTop) * clearing;
+      return { ...pine, height: pine.height - (nextTop - oldTop), top: nextTop };
+    });
+    const layer = createForestLayer(width, height, 14831 + plane * 1543,
+      foliageBrushes, pineBrushes, zones,
+      plane >= 2 ? [...pines, ...heroPines] : pines,
+      palettes[plane], 0.91, skyline);
+    const layerContext = layer.getContext('2d');
+    if (!layerContext) {
+      layer.width = layer.height = 0;
+      continue;
+    }
+
+    // Connected broadleaf crowns interrupt the pine rhythm, with the foliage
+    // clustered around branch ends rather than floating above the canopy.
+    layerContext.globalCompositeOperation = 'source-over';
+    for (let tree = 0; tree < 112; tree += 1) {
+      const x = -0.04 + tree / 111 * 1.08 + (random() - 0.5) * 0.013;
+      const canopyY = sampleForestSkyline(skyline, x) + 0.045 + random() * 0.026;
+      const crownWidth = width * (0.018 + random() * 0.022);
+      const crownHeight = height * (0.11 + random() * 0.105);
+      drawCanopyBranchSystem(layerContext, x * width, canopyY * height, crownWidth, crownHeight * 1.6, random);
+      drawForestBrush(layerContext, foliageBrushes[tree % foliageBrushes.length],
+        x * width, canopyY * height, crownWidth * 1.5, crownHeight * 1.5,
+        (random() - 0.5) * 0.28, 0.98);
+    }
+    layerContext.globalCompositeOperation = 'source-over';
+    colorForestMask(layerContext, width, height, palettes[plane]);
+    // Dappled interior foliage gives each bank volume, not just a flat mask.
+    // This texture is baked once; the moving scene still draws one sprite.
+    layerContext.save();
+    layerContext.globalCompositeOperation = 'source-atop';
+    for (let fleck = 0; fleck < 4600; fleck += 1) {
+      const x = random() * width;
+      const y = random() * height;
+      const size = 0.6 + random() * 2.3;
+      layerContext.fillStyle = fleck % 3 === 0
+        ? 'rgba(232,222,180,0.035)' : 'rgba(24,32,25,0.04)';
+      layerContext.beginPath();
+      layerContext.ellipse(x, y, size * 1.9, size, -0.4, 0, TAU);
+      layerContext.fill();
+    }
+    layerContext.restore();
+    if (plane < 3) {
+      carveForestMist(layerContext, width, height, 0.33, 0.66, 0.12, 0.17, 0.5);
+      carveForestMist(layerContext, width, height, 0.68, 0.59, 0.16, 0.085, 0.27);
+      carveForestMist(layerContext, width, height, 0.86, 0.55, 0.1, 0.12, 0.21);
+    }
+    context.save();
+    context.filter = plane === 0 ? 'blur(2.2px)' : plane === 1 ? 'blur(1.1px)' : 'none';
+    context.globalAlpha = plane === 0 ? 0.4 : plane === 1 ? 0.56 : plane === 2 ? 0.7 : 0.97;
+    context.drawImage(layer, 0, 0);
+    context.restore();
+    layer.width = layer.height = 0;
   }
-
-  const backLayer = createForestLayer(
-    width,
-    height,
-    12289,
-    foliageBrushes,
-    pineBrushes,
-    [
-      { start: -0.05, end: 0.11, topStart: 0.18, topEnd: 0.2, baseY: 0.7, count: 80, minimumWidth: 0.012, maximumWidth: 0.035 },
-      { start: 0.07, end: 0.29, topStart: 0.2, topEnd: 0.42, baseY: 0.7, count: 92, minimumWidth: 0.011, maximumWidth: 0.032 },
-      { start: 0.39, end: 0.55, topStart: 0.27, topEnd: 0.4, baseY: 0.7, count: 58, minimumWidth: 0.01, maximumWidth: 0.029 },
-      { start: 0.51, end: 0.75, topStart: 0.39, topEnd: 0.29, baseY: 0.7, count: 70, minimumWidth: 0.01, maximumWidth: 0.028 },
-      { start: 0.7, end: 1.05, topStart: 0.28, topEnd: 0.34, baseY: 0.7, count: 104, minimumWidth: 0.01, maximumWidth: 0.03 },
-    ],
-    [
-      ...createPineForestBand(13159, 26, backSkyline, 0.72, 0.44, 0.7),
-      { x: 0.035, top: 0.18, width: 0.07, height: 0.49, opacity: 0.72, variant: 0 },
-      { x: 0.17, top: 0.27, width: 0.048, height: 0.39, opacity: 0.7, variant: 1 },
-      { x: 0.25, top: 0.3, width: 0.04, height: 0.35, opacity: 0.65, variant: 2 },
-      { x: 0.425, top: 0.15, width: 0.066, height: 0.54, opacity: 0.82, variant: 1 },
-      { x: 0.404, top: 0.29, width: 0.039, height: 0.37, opacity: 0.68, variant: 2 },
-      { x: 0.46, top: 0.31, width: 0.036, height: 0.34, opacity: 0.64, variant: 0 },
-      { x: 0.57, top: 0.35, width: 0.038, height: 0.31, opacity: 0.58, variant: 0 },
-      { x: 0.67, top: 0.29, width: 0.045, height: 0.37, opacity: 0.6, variant: 2 },
-      { x: 0.78, top: 0.24, width: 0.056, height: 0.43, opacity: 0.64, variant: 1 },
-      { x: 0.88, top: 0.28, width: 0.047, height: 0.38, opacity: 0.58, variant: 0 },
-      { x: 0.97, top: 0.26, width: 0.05, height: 0.4, opacity: 0.54, variant: 2 },
-    ],
-    backPalette,
-    0.72,
-    backSkyline,
-  );
-  const backLayerContext = backLayer.getContext('2d');
-  if (backLayerContext) {
-    carveForestMist(backLayerContext, width, height, 0.16, 0.5, 0.065, 0.1, 0.14);
-    carveForestMist(backLayerContext, width, height, 0.34, 0.48, 0.082, 0.13, 0.24);
-    carveForestMist(backLayerContext, width, height, 0.54, 0.47, 0.07, 0.11, 0.14);
-    carveForestMist(backLayerContext, width, height, 0.7, 0.39, 0.09, 0.12, 0.16);
-    carveForestMist(backLayerContext, width, height, 0.87, 0.45, 0.075, 0.11, 0.13);
-  }
-
-  const middleLayer = createForestLayer(
-    width,
-    height,
-    14731,
-    foliageBrushes,
-    pineBrushes,
-    [
-      { start: -0.06, end: 0.12, topStart: 0.14, topEnd: 0.18, baseY: 0.7, count: 104, minimumWidth: 0.011, maximumWidth: 0.032 },
-      { start: 0.08, end: 0.29, topStart: 0.18, topEnd: 0.4, baseY: 0.7, count: 112, minimumWidth: 0.01, maximumWidth: 0.03 },
-      { start: 0.39, end: 0.5, topStart: 0.24, topEnd: 0.42, baseY: 0.7, count: 52, minimumWidth: 0.009, maximumWidth: 0.027 },
-      { start: 0.47, end: 0.7, topStart: 0.42, topEnd: 0.31, baseY: 0.7, count: 86, minimumWidth: 0.009, maximumWidth: 0.027 },
-      { start: 0.68, end: 1.05, topStart: 0.26, topEnd: 0.32, baseY: 0.7, count: 122, minimumWidth: 0.009, maximumWidth: 0.029 },
-    ],
-    [
-      ...createPineForestBand(15233, 32, middleSkyline, 0.72, 0.54, 0.8),
-      { x: 0.08, top: 0.18, width: 0.064, height: 0.48, opacity: 0.84, variant: 2, rotation: -0.015 },
-      { x: 0.19, top: 0.26, width: 0.044, height: 0.4, opacity: 0.78, variant: 0 },
-      { x: 0.265, top: 0.3, width: 0.038, height: 0.36, opacity: 0.72, variant: 1 },
-      { x: 0.432, top: 0.11, width: 0.064, height: 0.57, opacity: 0.94, variant: 0, rotation: 0.012 },
-      { x: 0.405, top: 0.27, width: 0.042, height: 0.4, opacity: 0.8, variant: 2 },
-      { x: 0.462, top: 0.3, width: 0.038, height: 0.36, opacity: 0.76, variant: 1 },
-      { x: 0.615, top: 0.31, width: 0.04, height: 0.34, opacity: 0.68, variant: 2 },
-      { x: 0.755, top: 0.23, width: 0.054, height: 0.43, opacity: 0.76, variant: 1 },
-      { x: 0.855, top: 0.28, width: 0.046, height: 0.37, opacity: 0.66, variant: 2 },
-      { x: 0.945, top: 0.25, width: 0.052, height: 0.41, opacity: 0.6, variant: 0 },
-    ],
-    middlePalette,
-    0.72,
-    middleSkyline,
-  );
-  const middleLayerContext = middleLayer.getContext('2d');
-  if (middleLayerContext) {
-    carveForestMist(middleLayerContext, width, height, 0.17, 0.51, 0.06, 0.09, 0.1);
-    carveForestMist(middleLayerContext, width, height, 0.34, 0.5, 0.072, 0.12, 0.18);
-    carveForestMist(middleLayerContext, width, height, 0.56, 0.43, 0.055, 0.085, 0.1);
-    carveForestMist(middleLayerContext, width, height, 0.79, 0.45, 0.07, 0.1, 0.11);
-  }
-
-  const frontLayer = createForestLayer(
-    width,
-    height,
-    16411,
-    foliageBrushes,
-    pineBrushes,
-    [
-      { start: -0.07, end: 0.13, topStart: 0.11, topEnd: 0.17, baseY: 0.69, count: 124, minimumWidth: 0.01, maximumWidth: 0.03 },
-      { start: 0.08, end: 0.29, topStart: 0.17, topEnd: 0.39, baseY: 0.69, count: 126, minimumWidth: 0.009, maximumWidth: 0.028 },
-      { start: 0.395, end: 0.5, topStart: 0.26, topEnd: 0.43, baseY: 0.69, count: 52, minimumWidth: 0.009, maximumWidth: 0.026 },
-      { start: 0.47, end: 0.7, topStart: 0.43, topEnd: 0.3, baseY: 0.69, count: 92, minimumWidth: 0.008, maximumWidth: 0.026 },
-      { start: 0.68, end: 1.07, topStart: 0.25, topEnd: 0.32, baseY: 0.69, count: 138, minimumWidth: 0.008, maximumWidth: 0.028 },
-    ],
-    [
-      ...createPineForestBand(17029, 28, frontSkyline, 0.71, 0.62, 0.88),
-      { x: 0.045, top: 0.14, width: 0.07, height: 0.52, opacity: 0.9, variant: 1, rotation: -0.02 },
-      { x: 0.18, top: 0.26, width: 0.043, height: 0.39, opacity: 0.86, variant: 2 },
-      { x: 0.255, top: 0.29, width: 0.037, height: 0.36, opacity: 0.8, variant: 0 },
-      { x: 0.43, top: 0.1, width: 0.062, height: 0.58, opacity: 0.98, variant: 1, rotation: 0.01 },
-      { x: 0.405, top: 0.25, width: 0.044, height: 0.42, opacity: 0.88, variant: 0 },
-      { x: 0.463, top: 0.29, width: 0.039, height: 0.37, opacity: 0.84, variant: 2 },
-      { x: 0.58, top: 0.35, width: 0.038, height: 0.3, opacity: 0.76, variant: 0 },
-      { x: 0.66, top: 0.3, width: 0.044, height: 0.36, opacity: 0.78, variant: 2 },
-      { x: 0.77, top: 0.24, width: 0.055, height: 0.43, opacity: 0.82, variant: 0 },
-      { x: 0.86, top: 0.28, width: 0.047, height: 0.37, opacity: 0.72, variant: 1 },
-      { x: 0.96, top: 0.25, width: 0.052, height: 0.41, opacity: 0.66, variant: 2 },
-    ],
-    frontPalette,
-    0.71,
-    frontSkyline,
-  );
-  const frontLayerContext = frontLayer.getContext('2d');
-  if (frontLayerContext) {
-    carveForestMist(frontLayerContext, width, height, 0.16, 0.56, 0.055, 0.085, 0.08);
-    carveForestMist(frontLayerContext, width, height, 0.36, 0.55, 0.06, 0.09, 0.1);
-    carveForestMist(frontLayerContext, width, height, 0.59, 0.51, 0.06, 0.09, 0.09);
-    carveForestMist(frontLayerContext, width, height, 0.82, 0.52, 0.065, 0.095, 0.08);
-  }
-
-  context.save();
-  context.filter = 'blur(6px)';
-  context.globalAlpha = 0.26;
-  context.drawImage(mistLayer, 0, 0);
-  context.restore();
-
-  context.save();
-  context.filter = 'blur(4px)';
-  context.globalAlpha = 0.4;
-  context.drawImage(backLayer, 0, 0);
-  context.restore();
-
-  context.save();
-  context.filter = 'blur(1.7px)';
-  context.globalAlpha = 0.56;
-  context.drawImage(middleLayer, 0, 0);
-  context.restore();
-
-  context.save();
-  context.filter = 'blur(0.5px)';
-  context.globalAlpha = 0.8;
-  context.drawImage(frontLayer, 0, 0);
-  context.restore();
 
   context.save();
   context.globalCompositeOperation = 'source-atop';
-  const sunWash = context.createRadialGradient(
-    width * 1.03,
-    height * 0.28,
-    0,
-    width * 1.03,
-    height * 0.28,
-    width * 0.62,
-  );
-  sunWash.addColorStop(0, rgba([239, 188, 128], 0.34));
-  sunWash.addColorStop(0.48, rgba([213, 157, 109], 0.14));
-  sunWash.addColorStop(1, rgba([213, 157, 109], 0));
-  context.fillStyle = sunWash;
+  const sunlight = context.createLinearGradient(width * 0.42, 0, width, height * 0.35);
+  sunlight.addColorStop(0, 'rgba(245,226,187,0)');
+  sunlight.addColorStop(0.45, 'rgba(245,220,175,0.08)');
+  sunlight.addColorStop(1, 'rgba(253,232,185,0.34)');
+  context.fillStyle = sunlight;
   context.fillRect(0, 0, width, height);
   context.restore();
-
-  context.save();
-  context.globalCompositeOperation = 'destination-in';
-  const sunlightFade = context.createLinearGradient(0, 0, width, 0);
-  sunlightFade.addColorStop(0, 'rgba(255,255,255,1)');
-  sunlightFade.addColorStop(0.54, 'rgba(255,255,255,0.98)');
-  sunlightFade.addColorStop(0.72, 'rgba(255,255,255,0.92)');
-  sunlightFade.addColorStop(0.86, 'rgba(255,255,255,0.82)');
-  sunlightFade.addColorStop(1, 'rgba(255,255,255,0.72)');
-  context.fillStyle = sunlightFade;
-  context.fillRect(0, 0, width, height);
-  context.restore();
-
+  for (const brush of [...foliageBrushes, ...pineBrushes]) brush.width = brush.height = 0;
   return canvas;
 }
 
@@ -2293,22 +2092,28 @@ function createRadialWashSprite(
 function createAtmosphericWashSprites(): AtmosphericWashSprites {
   const white: Rgb = [255, 255, 255];
   const sky = document.createElement('canvas');
-  sky.width = 1;
-  sky.height = 512;
+  sky.width = 128;
+  sky.height = 320;
   const context = sky.getContext('2d', { alpha: false })!;
   const gradient = context.createLinearGradient(0, 0, 0, sky.height);
-  gradient.addColorStop(0, '#d8ecfc');
-  gradient.addColorStop(0.44, '#eaf5fd');
-  gradient.addColorStop(0.76, '#f5f9fb');
-  gradient.addColorStop(1, '#fff5e8');
+  gradient.addColorStop(0, '#e5e1dc');
+  gradient.addColorStop(0.44, '#e9e6dd');
+  gradient.addColorStop(0.76, '#e3e2d8');
+  gradient.addColorStop(1, '#d8d9cb');
   context.fillStyle = gradient;
-  context.fillRect(0, 0, 1, sky.height);
+  context.fillRect(0, 0, sky.width, sky.height);
+  const dawn = context.createLinearGradient(0, sky.height * 0.65, sky.width, sky.height * 0.25);
+  dawn.addColorStop(0, 'rgba(190,198,193,0.1)');
+  dawn.addColorStop(0.45, 'rgba(247,235,213,0.08)');
+  dawn.addColorStop(1, 'rgba(255,240,210,0.82)');
+  context.fillStyle = dawn;
+  context.fillRect(0, 0, sky.width, sky.height);
   const riverColor = mixRgb(RIVER_LIGHT_BLUE, SKY_CYAN, 0.58);
   const sunStops = [[0, 0.038], [0.58, 0.012], [1, 0]] as const;
   return {
     sky,
-    riverBed: createRadialWashSprite(riverColor, [[0, 0.13], [0.48, 0.065], [0.82, 0.018], [1, 0]], 512, 256),
-    riverLobe: createRadialWashSprite(riverColor, [[0, 0.36], [0.42, 0.18], [0.76, 0.05], [1, 0]], 512, 256),
+    riverBed: createRadialWashSprite(riverColor, [[0, 0.32], [0.48, 0.14], [0.82, 0.028], [1, 0]], 512, 256),
+    riverLobe: createRadialWashSprite(riverColor, [[0, 0.52], [0.42, 0.24], [0.76, 0.055], [1, 0]], 512, 256),
     sunAccent: createRadialWashSprite(white, sunStops, 256, 256, 0.018 / (0.43 * 1.12)),
     compactSunAccent: createRadialWashSprite(white, sunStops, 256, 256, 0.018 / (0.36 * 1.12)),
     cyan: createRadialWashSprite(SKY_CYAN, [[0, 0.045], [1, 0]]),
@@ -2491,7 +2296,7 @@ function createHazeLayers(
       phase: 0.7,
       driftX: width * 0.012,
       driftY: height * 0.01,
-      opacity: 0.44,
+      opacity: 0.11,
       layer: 'far',
       sprite: sprites.cyanHaze,
     },
@@ -2504,20 +2309,20 @@ function createHazeLayers(
       phase: 2.3,
       driftX: width * 0.018,
       driftY: height * 0.014,
-      opacity: 0.38,
+      opacity: 0.14,
       layer: 'middle',
       sprite: sprites.lavenderHaze,
     },
     {
       x: width * 0.14,
-      y: height * 0.86,
-      width: Math.max(width * 0.86, shortSide),
-      height: Math.max(height * 0.44, shortSide * 0.5),
+      y: height * 0.865,
+      width: Math.max(width * 0.68, shortSide * 0.7),
+      height: Math.max(height * 0.2, shortSide * 0.2),
       depthProfile: LIGHT_DEPTH_PROFILES.nearHaze,
       phase: 4.8,
       driftX: width * 0.021,
       driftY: height * 0.017,
-      opacity: 0.3,
+      opacity: 0.29,
       layer: 'near',
       sprite: sprites.foregroundCyanHaze,
     },
@@ -2525,7 +2330,7 @@ function createHazeLayers(
       x: width * 0.42,
       y: height * 0.87,
       width: Math.max(width * 0.54, shortSide * 0.72),
-      height: Math.max(height * 0.38, shortSide * 0.44),
+      height: Math.max(height * 0.16, shortSide * 0.19),
       depthProfile: LIGHT_DEPTH_PROFILES.nearHaze,
       phase: 5.9,
       driftX: width * 0.016,
@@ -2555,7 +2360,7 @@ function createDistantHills(
       width: hillWidth,
       height: height * (compact ? 0.7 : 0.8),
       depthProfile: LIGHT_DEPTH_PROFILES.distantHill,
-      opacity: 0.43,
+      opacity: 0.64,
       sprite: sprites.far,
     },
     {
@@ -2564,7 +2369,7 @@ function createDistantHills(
       width: hillWidth * 1.02,
       height: height * (compact ? 0.62 : 0.7),
       depthProfile: LIGHT_DEPTH_PROFILES.distantHill,
-      opacity: 0.24,
+      opacity: 0.43,
       sprite: sprites.middle,
     },
     {
@@ -2573,7 +2378,7 @@ function createDistantHills(
       width: hillWidth * 1.04,
       height: height * (compact ? 0.58 : 0.62),
       depthProfile: LIGHT_DEPTH_PROFILES.distantHill,
-      opacity: 0.26,
+      opacity: 0.48,
       sprite: sprites.near,
     },
   ];
@@ -2585,13 +2390,18 @@ function createForegroundTrees(
   compact: boolean,
   sprite: HTMLCanvasElement,
 ): ForegroundTreeLine {
+  // Do not stretch a landscape woodland into tall poles on phones or tablets.
+  const portrait = height > width;
+  const forestHeight = compact
+    ? Math.min(height * 0.4, width * 0.7)
+    : Math.min(height * 0.56, width * 0.6);
   return {
     x: width * 0.5,
-    y: height * (compact ? 0.92 : 0.9),
-    width: width * (compact ? 1.38 : 1.22),
-    height: height * (compact ? 0.46 : 0.52),
+    y: height - forestHeight * (compact ? 0.3 : 0.25),
+    width: width * (compact ? 1.65 : portrait ? 1.5 : 1.1),
+    height: forestHeight,
     depthProfile: LIGHT_DEPTH_PROFILES.foregroundTrees,
-    opacity: 0.7,
+    opacity: 0.9,
     sprite,
   };
 }
@@ -2918,7 +2728,9 @@ function createRisingRiverFragments(
           : 0.03 + random() * 0.52;
     const sourceX = width * clamp(sourceXRatio, -0.13, 0.55);
     const sourceY = height * (0.89 + random() * 0.06);
-    const targetY = height * (0.1 + random() * 0.26);
+    const altitudeRoll = random();
+    const targetY = height * (altitudeRoll < 0.2
+      ? 0.1 + altitudeRoll * 0.75 : 0.25 + (altitudeRoll - 0.2) * 0.2375);
     const riseDistance = sourceY - targetY;
     const angle = (67 + random() * 6) * Math.PI / 180;
     const endpointLimit = width * (compact ? 0.62 : 0.68);
@@ -3218,7 +3030,7 @@ function drawDepthImage(
   context.transform(1, Math.sin(pitch) * 0.11, Math.sin(yaw) * 0.085, 1, 0, 0);
   context.rotate(rotation + (yaw - pitch) * 0.025);
   context.scale(scene.projection.scale, scene.projection.scale);
-  context.globalAlpha = opacity * scene.projection.alphaScale;
+  context.globalAlpha = clamp(opacity * scene.projection.alphaScale, 0, 1);
   context.drawImage(image, -width * 0.5, -height * 0.5, width, height);
   context.restore();
 }
@@ -3356,7 +3168,7 @@ function drawRiverGlow(
   parallax: ParallaxFrame,
   washes: AtmosphericWashSprites,
 ) {
-  const centerY = scene.height * (scene.compact ? 0.92 : 0.91);
+  const centerY = scene.height * (scene.compact ? 0.9 : 0.865);
   const lobes = scene.compact ? COMPACT_RIVER_GLOW_LOBES : DESKTOP_RIVER_GLOW_LOBES;
   context.save();
   context.beginPath();
@@ -3671,7 +3483,8 @@ function drawRisingRiverFragments(
       scene.height * 0.92,
       y,
     );
-    const opacity = fragment.opacity * fadeIn * fadeOut * canopyReveal;
+    const aerialFade = 1 - smoothstep(0.2, 1, riseProgress) * 0.42;
+    const opacity = fragment.opacity * fadeIn * fadeOut * canopyReveal * aerialFade;
     if (opacity <= 0.001) continue;
     const depthResponse = 1 - smoothstep(0, 1, riseProgress) * 0.45;
     projectAtDepth(
