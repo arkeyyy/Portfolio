@@ -17,6 +17,7 @@ export type EdgeGlowSprites = {
   edge: HTMLCanvasElement;
   cyan: HTMLCanvasElement;
   tint: HTMLCanvasElement;
+  goldCore: HTMLCanvasElement;
 };
 
 const FOREGROUND_GLOW_GOLD: Rgb = [239, 188, 128];
@@ -26,7 +27,8 @@ export function createEdgeGlowSprites(): EdgeGlowSprites {
   return {
     edge: createRadialWashSprite(white, [[0, 0.06], [0.62, 0.02], [1, 0]]),
     cyan: createRadialWashSprite(SKY_CYAN, [[0, 0.045], [1, 0]]),
-    tint: createRadialWashSprite(white, [[0, 0.14], [0.48, 0.07], [0.78, 0.015], [1, 0]]),
+    tint: createRadialWashSprite(white, [[0, 0.105], [0.48, 0.07], [0.78, 0.015], [1, 0]]),
+    goldCore: createRadialWashSprite(FOREGROUND_GLOW_GOLD, [[0, 0.04], [0.5, 0.016], [1, 0]]),
   };
 }
 
@@ -38,11 +40,14 @@ function drawForegroundGlowTint(
   washes: EdgeGlowSprites,
   planes: FramePlanes,
 ) {
-  mixRgbInto(FOREGROUND_GLOW_GOLD, activeColor, 0.34, planes.foregroundColor);
+  mixRgbInto(FOREGROUND_GLOW_GOLD, activeColor, 0.52, planes.foregroundColor);
   projectAtDepth(parallax, scene.width * 1.06, scene.height * 0.8,
     LIGHT_DEPTH_PROFILES.foregroundTrees, scene.projection);
+  const radius = Math.max(scene.width * 0.72, scene.height * 0.78);
   drawRadialWash(context, tintWash(washes.tint, planes.foregroundColor, planes.tintScratch),
-    scene.projection.x, scene.projection.y, Math.max(scene.width * 0.72, scene.height * 0.78));
+    scene.projection.x, scene.projection.y, radius);
+  drawRadialWash(context, washes.goldCore,
+    scene.projection.x, scene.projection.y, radius * 0.58);
 }
 
 function drawEdgeGlow(

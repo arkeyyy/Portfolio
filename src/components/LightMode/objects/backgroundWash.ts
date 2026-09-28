@@ -9,6 +9,7 @@ export type BackgroundWashSprites = {
   sky: HTMLCanvasElement;
   lavender: HTMLCanvasElement;
   right: HTMLCanvasElement;
+  rightGoldCore: HTMLCanvasElement;
   lowerRight: HTMLCanvasElement;
   accent: HTMLCanvasElement;
 };
@@ -37,7 +38,8 @@ export function createBackgroundWashSprites(): BackgroundWashSprites {
   return {
     sky,
     lavender: createRadialWashSprite(SKY_LAVENDER, [[0, 0.055], [1, 0]]),
-    right: createRadialWashSprite(white, [[0, 0.11], [0.5, 0.045], [1, 0]]),
+    right: createRadialWashSprite(white, [[0, 0.07], [0.5, 0.04], [1, 0]]),
+    rightGoldCore: createRadialWashSprite(RIGHT_GLOW_GOLD, [[0, 0.045], [0.48, 0.015], [1, 0]]),
     lowerRight: createRadialWashSprite(white, [[0, 0.052], [1, 0]]),
     accent: createRadialWashSprite(white, [[0, 0.085], [0.48, 0.035], [1, 0]]),
   };
@@ -62,10 +64,13 @@ export function drawAtmosphericWash(
   const shortSide = Math.min(scene.width, scene.height);
   const farX = getParallaxOffsetX(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
   const farY = getParallaxOffsetY(parallax, LIGHT_DEPTH_PROFILES.farHaze.translation);
-  mixRgbInto(RIGHT_GLOW_GOLD, activeColor, 0.3, planes.rightColor);
+  mixRgbInto(RIGHT_GLOW_GOLD, activeColor, 0.5, planes.rightColor);
   drawRadialWash(context, tintWash(washes.right, planes.rightColor, planes.tintScratch),
     scene.width * 1.02 + farX, scene.height * 0.38 + farY,
     Math.max(scene.width * 0.6, scene.height * 0.72));
+  drawRadialWash(context, washes.rightGoldCore,
+    scene.width * 1.02 + farX, scene.height * 0.38 + farY,
+    Math.max(scene.width * 0.6, scene.height * 0.72) * 0.6);
   drawRadialWash(context, tintWash(washes.lowerRight, planes.rightColor, planes.tintScratch),
     scene.width * 0.98 + farX, scene.height * 0.94 + farY, shortSide * 0.76);
   drawRadialWash(context, tintWash(washes.accent, activeColor, planes.tintScratch),
