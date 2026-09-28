@@ -1,0 +1,2 @@
+export const RIVER_GLOW_FLOW_BOUNDARY_X = 0.76;
+
