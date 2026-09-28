@@ -614,12 +614,14 @@ type RenderDarkModeProps = {
   activeColor: string;
   session: RendererSession<DarkRendererSnapshot>;
   deviceOrientationSession: DeviceOrientationSession;
+  onFirstPaint: () => void;
 };
 
 export default function RenderDarkMode({
   activeColor,
   session,
   deviceOrientationSession,
+  onFirstPaint,
 }: RenderDarkModeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const targetColorRef = useRef<Rgb>([...DEFAULT_ACTIVE_COLOR]);
@@ -633,6 +635,11 @@ export default function RenderDarkMode({
   }, [activeColor]);
 
   useEffect(() => {
+    let startupFrame = 0;
+    let startupTimer = 0;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    const initialize = () => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
     const background = canvas?.parentElement;
@@ -688,6 +695,7 @@ export default function RenderDarkMode({
       }
     }
     let scene: Scene | null = null;
+    let firstPaintReported = false;
     let animationFrame = 0;
     let resizeFrame = 0;
     let lastPaintTime = 0;
@@ -928,6 +936,10 @@ export default function RenderDarkMode({
         reducedMotion,
         parallax,
       );
+      if (!firstPaintReported) {
+        firstPaintReported = true;
+        onFirstPaint();
+      }
     };
 
     const animate = (time: number) => {
@@ -1139,7 +1151,23 @@ export default function RenderDarkMode({
       stopDeviceTilt();
       redrawStaticSceneRef.current = null;
     };
-  }, [deviceOrientationSession, session]);
+    };
+    if (document.documentElement.classList.contains('portfolio-booting')) {
+      startupFrame = window.requestAnimationFrame(() => {
+        startupTimer = window.setTimeout(() => {
+          if (!cancelled) cleanup = initialize();
+        }, 0);
+      });
+    } else {
+      cleanup = initialize();
+    }
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(startupFrame);
+      window.clearTimeout(startupTimer);
+      cleanup?.();
+    };
+  }, [deviceOrientationSession, onFirstPaint, session]);
 
   return (
     <div className="ambient-background" aria-hidden="true">

@@ -9,7 +9,7 @@ import ContactPage from './components/ContactPage';
 import Footer from './components/Footer';
 import RenderDarkMode from './components/DarkMode/RenderDarkMode';
 import RenderLightMode from './components/LightMode/RenderLightMode';
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { isSectionId, sectionById, sections } from './sectionTheme';
 import type { SectionId } from './sectionTheme';
@@ -22,6 +22,11 @@ import type {
 } from './background-renderer/session';
 import { requestDeviceOrientationPermission } from './background-renderer/session';
 import { prewarmBackgroundRenderer } from './background-renderer/prewarm';
+import {
+  getInitialScrollTarget,
+  restoreScrollPosition,
+  saveScrollPosition,
+} from './background-renderer/boot';
 
 const THEME_STORAGE_KEY = 'aldrin-portfolio-theme';
 const DARK_THEME_COLOR = '#0b0c0f';
@@ -43,6 +48,7 @@ function getInitialTheme() {
 }
 
 function App() {
+  const [initialScrollTarget] = useState(getInitialScrollTarget);
   const darkRendererSnapshotRef = useRef<DarkRendererSnapshot | null>(null);
   const lightRendererSnapshotRef = useRef<LightRendererSnapshot | null>(null);
   const deviceOrientationStateRef = useRef<DeviceOrientationSessionState>({
@@ -84,12 +90,18 @@ function App() {
     }),
     [],
   );
-  const [activeSection, setActiveSection] = useState<SectionId>('about');
+  const [activeSection, setActiveSection] = useState<SectionId>(initialScrollTarget.section);
   const [isDarkMode, setIsDarkMode] = useState(getInitialTheme);
+  const [hasFirstPaint, setHasFirstPaint] = useState(false);
+  const [hasRevealed, setHasRevealed] = useState(false);
   const [isInterfaceHidden, setIsInterfaceHidden] = useState(false);
   const [isBackgroundHintVisible, setIsBackgroundHintVisible] = useState(false);
   const isLightModeActive = LIGHT_MODE_AVAILABLE && !isDarkMode;
   const isDarkModeActive = !isLightModeActive;
+  const handleFirstPaint = useCallback(() => {
+    document.documentElement.classList.add('background-ambience-ready');
+    setHasFirstPaint(true);
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -112,31 +124,122 @@ function App() {
   }, [isDarkMode, isDarkModeActive]);
 
   useEffect(() => {
+    if (!hasFirstPaint || !hasRevealed) return;
+    let prewarmed = false;
+    let delayElapsed = false;
+    let fallbackTimer: number | undefined;
+    let idleCallback: number | undefined;
     const prewarmInactiveRenderer = () => {
+      fallbackTimer = undefined;
+      idleCallback = undefined;
+      if (document.hidden) return;
+      prewarmed = true;
       prewarmBackgroundRenderer(isLightModeActive ? 'dark' : 'light');
     };
     const idleWindow = window as typeof window & {
       requestIdleCallback?: Window['requestIdleCallback'];
       cancelIdleCallback?: Window['cancelIdleCallback'];
     };
-    let fallbackTimer: number | undefined;
-    let idleCallback: number | undefined;
-
-    if (idleWindow.requestIdleCallback) {
-      idleCallback = idleWindow.requestIdleCallback(prewarmInactiveRenderer, {
-        timeout: 1200,
-      });
-    } else {
-      fallbackTimer = window.setTimeout(prewarmInactiveRenderer, 160);
-    }
+    const queuePrewarm = () => {
+      if (prewarmed || document.hidden) return;
+      if (idleCallback !== undefined && idleWindow.cancelIdleCallback) {
+        idleWindow.cancelIdleCallback(idleCallback);
+      }
+      if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
+      if (idleWindow.requestIdleCallback) {
+        idleCallback = idleWindow.requestIdleCallback(prewarmInactiveRenderer, {
+          timeout: 4000,
+        });
+      } else {
+        fallbackTimer = window.setTimeout(prewarmInactiveRenderer, 1000);
+      }
+    };
+    const handleVisibility = () => {
+      if (delayElapsed && !document.hidden) queuePrewarm();
+    };
+    const delayTimer = window.setTimeout(() => {
+      delayElapsed = true;
+      queuePrewarm();
+    }, 1500);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.clearTimeout(delayTimer);
       if (idleCallback !== undefined && idleWindow.cancelIdleCallback) {
         idleWindow.cancelIdleCallback(idleCallback);
       }
       if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
     };
-  }, [isLightModeActive]);
+  }, [hasFirstPaint, hasRevealed, isLightModeActive]);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('portfolio-mounted');
+    restoreScrollPosition(initialScrollTarget);
+    let saveTimer = 0;
+    const save = () => {
+      window.clearTimeout(saveTimer);
+      saveTimer = 0;
+      saveScrollPosition();
+    };
+    const handleScroll = () => {
+      if (root.classList.contains('portfolio-booting')) return;
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(save, 120);
+    };
+    const fallbackTimer = window.setTimeout(() => {
+      if (!root.classList.contains('portfolio-booting')) return;
+      restoreScrollPosition(initialScrollTarget);
+      root.classList.remove('portfolio-booting');
+      setHasRevealed(true);
+    }, 1500);
+    window.addEventListener('pagehide', save);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      window.clearTimeout(saveTimer);
+      window.removeEventListener('pagehide', save);
+      window.removeEventListener('scroll', handleScroll);
+      root.classList.remove('portfolio-mounted');
+    };
+  }, [initialScrollTarget]);
+
+  useEffect(() => {
+    if (!hasFirstPaint) return;
+    const root = document.documentElement;
+    let cancelled = false;
+    let finished = false;
+    let frame = 0;
+    const reveal = () => {
+      if (cancelled || finished) return;
+      finished = true;
+      window.clearTimeout(fontTimer);
+      frame = window.requestAnimationFrame(() => {
+        if (cancelled) return;
+        restoreScrollPosition(initialScrollTarget);
+        root.classList.remove('portfolio-booting');
+        setHasRevealed(true);
+      });
+    };
+    const fontTimer = window.setTimeout(reveal, 280);
+    document.fonts.ready.then(reveal, reveal);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fontTimer);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [hasFirstPaint, initialScrollTarget]);
+
+  useEffect(() => {
+    if (!hasRevealed || document.documentElement.dataset.portfolioReload !== 'true') return;
+    const restoreNativeScroll = () => {
+      window.history.scrollRestoration = 'auto';
+    };
+    if (document.readyState === 'complete') restoreNativeScroll();
+    else window.addEventListener('load', restoreNativeScroll, { once: true });
+    return () => window.removeEventListener('load', restoreNativeScroll);
+  }, [hasRevealed]);
 
   useEffect(() => {
     const observerOptions = {
@@ -161,21 +264,6 @@ function App() {
     });
 
     return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const hash = window.location.hash.slice(1);
-    if (!isSectionId(hash)) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      const root = document.documentElement;
-      const previousScrollBehavior = root.style.scrollBehavior;
-      root.style.scrollBehavior = 'auto';
-      document.getElementById(hash)?.scrollIntoView({ block: 'start' });
-      root.style.scrollBehavior = previousScrollBehavior;
-    });
-
-    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -255,19 +343,25 @@ function App() {
           activeColor={activeTheme.color}
           session={lightRendererSession}
           deviceOrientationSession={deviceOrientationSession}
+          onFirstPaint={handleFirstPaint}
         />
       ) : (
         <RenderDarkMode
           activeColor={activeTheme.color}
           session={darkRendererSession}
           deviceOrientationSession={deviceOrientationSession}
+          onFirstPaint={handleFirstPaint}
         />
       )}
 
+      <div className="background-ambience-layer" aria-hidden="true">
+        <span className="background-ambience-points" />
+      </div>
+
       <div
         className="site-interface"
-        aria-hidden={isInterfaceHidden}
-        inert={isInterfaceHidden ? true : undefined}
+        aria-hidden={isInterfaceHidden || !hasRevealed}
+        inert={isInterfaceHidden || !hasRevealed ? true : undefined}
       >
         <Navbar
           activeSection={activeSection}

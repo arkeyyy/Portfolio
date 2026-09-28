@@ -3,22 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Amaranth:wght@400;700&display=swap"
-      rel="stylesheet"
-    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
       content="Developer portfolio - selected software projects, skills, certifications, education, and contact information."
     />
     <meta name="theme-color" content="#0b0c0f" />
+    <style>
+      html { background: #e9e6dd; }
+      html.dark { background: #12031a; }
+    </style>
     <script>
       (() => {
         const root = document.documentElement;
         const storageKey = 'aldrin-portfolio-theme';
+        root.classList.add('portfolio-booting');
         let isDarkMode;
 
         try {
@@ -32,11 +31,22 @@
 
         root.classList.toggle('dark', isDarkMode);
         root.style.colorScheme = isDarkMode ? 'dark' : 'light';
+        const navigation = performance.getEntriesByType('navigation')[0];
+        if (navigation && navigation.type === 'reload') {
+          root.dataset.portfolioReload = 'true';
+          window.history.scrollRestoration = 'manual';
+        }
         document
           .querySelector('meta[name="theme-color"]')
           ?.setAttribute('content', isDarkMode ? '#0b0c0f' : '#e9edf7');
       })();
     </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Amaranth:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
     <title>Suse Developer Portfolio</title>
   </head>
   <body>

@@ -145,6 +145,7 @@ type RenderLightModeProps = {
   activeColor: string;
   session: RendererSession<LightRendererSnapshot>;
   deviceOrientationSession: DeviceOrientationSession;
+  onFirstPaint: () => void;
 };
 
 type LightModeSpriteBundle = {
@@ -441,6 +442,7 @@ export default function RenderLightMode({
   activeColor,
   session,
   deviceOrientationSession,
+  onFirstPaint,
 }: RenderLightModeProps) {
   const backgroundRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -453,6 +455,11 @@ export default function RenderLightMode({
   }, [activeColor]);
 
   useEffect(() => {
+    let startupFrame = 0;
+    let startupTimer = 0;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    const initialize = () => {
     const background = backgroundRef.current;
     const canvas = canvasRef.current;
     if (!background || !canvas) return;
@@ -520,6 +527,7 @@ export default function RenderLightMode({
         (channel, index) => Math.abs(channel - restoredTargetColor[index]) <= 0.01,
       );
     let disposed = false;
+    let firstPaintReported = false;
     let scene: LightScene | null = null;
     let planes: FramePlanes | null = null;
     let sceneCoarsePointer = coarsePointer.matches;
@@ -787,6 +795,10 @@ export default function RenderLightMode({
         planes,
         quality,
       );
+      if (!firstPaintReported) {
+        firstPaintReported = true;
+        onFirstPaint();
+      }
       if (!reducedMotion && frameInterval > 0) {
         recordQualityPaint(quality, time, performance.now() - paintStart, scheduledElapsed, frameInterval);
       }
@@ -1053,7 +1065,23 @@ export default function RenderLightMode({
       scene = null;
       canvas.width = canvas.height = 0;
     };
-  }, [deviceOrientationSession, session]);
+    };
+    if (document.documentElement.classList.contains('portfolio-booting')) {
+      startupFrame = window.requestAnimationFrame(() => {
+        startupTimer = window.setTimeout(() => {
+          if (!cancelled) cleanup = initialize();
+        }, 0);
+      });
+    } else {
+      cleanup = initialize();
+    }
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(startupFrame);
+      window.clearTimeout(startupTimer);
+      cleanup?.();
+    };
+  }, [deviceOrientationSession, onFirstPaint, session]);
 
   return (
     <div ref={backgroundRef} className="ambient-background light-atmosphere" aria-hidden="true">
