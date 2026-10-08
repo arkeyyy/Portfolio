@@ -135,9 +135,9 @@ export function drawGoldStars(
     }
 
     const coreSize = Math.max(0.48, size * 0.64);
-    context.fillStyle = rgba(color, alpha * 0.42);
+    context.fillStyle = rgba(color, alpha * 0.34);
     context.beginPath();
-    context.arc(projection.x, projection.y, size * 1.38, 0, TAU);
+    context.arc(projection.x, projection.y, size * 1.24, 0, TAU);
     context.fill();
     context.fillStyle = rgba(warmWhite, alpha * (0.74 + star.depth * 0.26));
     context.fillRect(

@@ -222,8 +222,8 @@ function createConstellationStarSprite(primary: Rgb, secondary: Rgb, white: Rgb)
   const halo = context.createRadialGradient(center, center, 0, center, center, 68);
   halo.addColorStop(0, rgba(white, 0.94));
   halo.addColorStop(0.08, rgba(primary, 0.72));
-  halo.addColorStop(0.26, rgba(secondary, 0.28));
-  halo.addColorStop(0.62, rgba(primary, 0.075));
+  halo.addColorStop(0.26, rgba(secondary, 0.23));
+  halo.addColorStop(0.62, rgba(primary, 0.052));
   halo.addColorStop(1, rgba(primary, 0));
   context.fillStyle = halo;
   context.fillRect(0, 0, canvas.width, canvas.height);
@@ -263,8 +263,8 @@ function createConstellationStarSprite(primary: Rgb, secondary: Rgb, white: Rgb)
 
   const core = context.createRadialGradient(center, center, 0, center, center, 13);
   core.addColorStop(0, rgba(white, 1));
-  core.addColorStop(0.18, rgba(white, 0.98));
-  core.addColorStop(0.46, rgba(primary, 0.86));
+  core.addColorStop(0.22, rgba(white, 0.98));
+  core.addColorStop(0.46, rgba(primary, 0.8));
   core.addColorStop(1, rgba(primary, 0));
   context.fillStyle = core;
   context.beginPath();

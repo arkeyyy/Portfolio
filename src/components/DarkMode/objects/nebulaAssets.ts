@@ -11,8 +11,13 @@ import {
   DEFAULT_ACTIVE_COLOR,
   FOREGROUND_CLOUD_PURPLE,
 } from '../core/theme';
+import {
+  createNebulaFilamentSprites,
+  type NebulaFilamentSprites,
+} from './nebulaFilaments';
 
 export type NebulaSprites = {
+  filaments: NebulaFilamentSprites;
   alpha: HTMLCanvasElement;
   active: HTMLCanvasElement;
   accent: HTMLCanvasElement;
@@ -22,6 +27,78 @@ export type NebulaSprites = {
   lastActiveColor: string;
   lastAccentColor: string;
 };
+
+function textureNebulaAlpha(context: CanvasRenderingContext2D, width: number, height: number) {
+  // Three seeded scales make the gas uneven without changing its envelope.
+  // Modify this mask only: dark channels subtract nebula light, never paint
+  // black across objects that happen to sit behind or in front of it.
+  const grids = [
+    { columns: 13, rows: 9, weight: 0.44 },
+    { columns: 35, rows: 19, weight: 0.34 },
+    { columns: 79, rows: 43, weight: 0.22 },
+  ].map((grid, octave) => ({
+    ...grid,
+    values: Float32Array.from(
+      { length: grid.columns * grid.rows },
+      (_, index) => seededRandom(45_310 + octave * 2_309 + index * 13.7),
+    ),
+  }));
+  const pixels = context.getImageData(0, 0, width, height);
+  // Sample at two-pixel intervals; the finest gas features span ~10px, so this
+  // preserves texture while avoiding four redundant noise evaluations.
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const alphaIndex = (y * width + x) * 4 + 3;
+      if (pixels.data[alphaIndex] === 0) continue;
+      let detail = 0;
+      for (const grid of grids) {
+        const gx = x / width * (grid.columns - 1);
+        const gy = y / height * (grid.rows - 1);
+        const ix = Math.floor(gx);
+        const iy = Math.floor(gy);
+        const fx = gx - ix;
+        const fy = gy - iy;
+        const sx = fx * fx * (3 - 2 * fx);
+        const sy = fy * fy * (3 - 2 * fy);
+        const topLeft = grid.values[iy * grid.columns + ix];
+        const bottomLeft = grid.values[(iy + 1) * grid.columns + ix];
+        const top = topLeft + (grid.values[iy * grid.columns + ix + 1] - topLeft) * sx;
+        const bottom = bottomLeft
+          + (grid.values[(iy + 1) * grid.columns + ix + 1] - bottomLeft) * sx;
+        detail += (top + (bottom - top) * sy) * grid.weight;
+      }
+      const density = 0.5 + detail;
+      pixels.data[alphaIndex] *= density;
+      pixels.data[alphaIndex + 4] *= density;
+      pixels.data[alphaIndex + width * 4] *= density;
+      pixels.data[alphaIndex + width * 4 + 4] *= density;
+    }
+  }
+  context.putImageData(pixels, 0, 0);
+
+  context.globalCompositeOperation = 'destination-out';
+  context.lineCap = 'round';
+  context.filter = 'blur(5px)';
+  for (let channel = 0; channel < 7; channel += 1) {
+    const seed = 47_120 + channel * 47.3;
+    const startX = width * (0.17 + seededRandom(seed) * 0.16);
+    const endX = width * (0.65 + seededRandom(seed + 1.9) * 0.14);
+    const baseY = height * (0.28 + seededRandom(seed + 3.1) * 0.4);
+    const bend = (seededRandom(seed + 5.7) - 0.5) * height * 0.25;
+    context.strokeStyle = `rgba(0, 0, 0, ${0.17 + seededRandom(seed + 7.9) * 0.16})`;
+    context.lineWidth = 3 + seededRandom(seed + 9.1) * 7;
+    context.beginPath();
+    context.moveTo(startX, baseY);
+    context.bezierCurveTo(
+      width * 0.39, baseY + bend,
+      width * 0.54, baseY - bend * 0.7,
+      endX, baseY + bend * 0.3,
+    );
+    context.stroke();
+  }
+  context.filter = 'none';
+  context.globalCompositeOperation = 'source-over';
+}
 
 function createNebulaAlphaSprite() {
   const canvas = document.createElement('canvas');
@@ -73,6 +150,8 @@ function createNebulaAlphaSprite() {
   }
   context.filter = 'none';
 
+  textureNebulaAlpha(context, canvas.width, canvas.height);
+
   // Fade the procedural texture to zero before it reaches the bitmap edges.
   // This prevents the softly blurred cloud from revealing its rectangular bounds.
   context.globalCompositeOperation = 'destination-in';
@@ -104,6 +183,7 @@ export function createNebulaSprites(): NebulaSprites | null {
   if (!activeTint.context || !accentTint.context || !purpleTint.context) return null;
 
   return {
+    filaments: createNebulaFilamentSprites(),
     alpha,
     active: activeTint.canvas,
     accent: accentTint.canvas,

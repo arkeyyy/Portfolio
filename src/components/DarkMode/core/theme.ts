@@ -78,7 +78,7 @@ export const COSMIC_RENDER_THEME: CosmicRenderTheme = {
   cloudCompositeOperation: 'screen',
   backgroundWash: { centerAlpha: 0.12, depthAlpha: 0.065 },
   fieldStarAlpha: 0.34,
-  goldStarAlpha: 0.58,
+  goldStarAlpha: 0.54,
   starClusters: { baseAlpha: 0.86, highlightAlpha: 0.92 },
   ringTrails: { baseAlpha: 0.09, laneFalloff: 0.01, dashAlpha: 0.17 },
   secondaryRings: {
@@ -92,12 +92,12 @@ export const COSMIC_RENDER_THEME: CosmicRenderTheme = {
   libra: { cloudAlpha: 0.72, lineAlpha: 0.64, starAlpha: 0.96 },
   cancer: { cloudAlpha: 0.5, lineAlpha: 0.48, starAlpha: 0.88 },
   distantCyclone: {
-    hazeAlpha: 0.34,
-    cyanAlpha: 0.56,
-    crestAlpha: 0.68,
-    pinkAlpha: 0.56,
-    sparkAlpha: 0.78,
-    coreAlpha: 0.82,
+    hazeAlpha: 0.31,
+    cyanAlpha: 0.52,
+    crestAlpha: 0.54,
+    pinkAlpha: 0.49,
+    sparkAlpha: 0.7,
+    coreAlpha: 0.62,
   },
   vortex: { activeAlpha: 0.56, accentAlpha: 0.34, coreAlpha: 0.065, starAlpha: 0.88 },
   clouds: {

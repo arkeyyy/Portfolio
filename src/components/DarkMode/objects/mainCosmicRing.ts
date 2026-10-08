@@ -86,13 +86,13 @@ export function drawMainRingTrails(
     context.lineWidth = 0.65 + lane * 0.28;
     context.strokeStyle = rgba(
       trailColor,
-      renderTheme.ringTrails.baseAlpha - lane * renderTheme.ringTrails.laneFalloff,
+      (renderTheme.ringTrails.baseAlpha - lane * renderTheme.ringTrails.laneFalloff) * 0.88,
     );
     context.setLineDash([]);
     context.stroke();
 
     context.lineWidth = 1.05 + lane * 0.24;
-    context.strokeStyle = rgba(trailColor, renderTheme.ringTrails.dashAlpha);
+    context.strokeStyle = rgba(trailColor, renderTheme.ringTrails.dashAlpha * 0.88);
     context.setLineDash([
       orbit.radiusX * (0.17 + lane * 0.015),
       orbit.radiusX * 0.055,
@@ -100,6 +100,28 @@ export function drawMainRingTrails(
       orbit.radiusX * 0.08,
     ]);
     context.lineDashOffset = -motionTime * (0.014 + lane * 0.002);
+    context.stroke();
+
+    // Keep every lane and its animated dashes, with just enough near-side
+    // definition to separate the orbit from its softer, more distant arc.
+    traceProjectedOrbit(
+      context,
+      compact,
+      parallax,
+      orbit,
+      laneScale,
+      DEPTH_FIELD_LAYERS.mainRing,
+      0,
+      Math.PI,
+    );
+    context.strokeStyle = rgba(trailColor, renderTheme.ringTrails.dashAlpha * 0.24);
+    context.stroke();
+    context.setLineDash([]);
+    context.lineWidth = 0.65 + lane * 0.28;
+    context.strokeStyle = rgba(
+      trailColor,
+      (renderTheme.ringTrails.baseAlpha - lane * renderTheme.ringTrails.laneFalloff) * 0.24,
+    );
     context.stroke();
   }
 

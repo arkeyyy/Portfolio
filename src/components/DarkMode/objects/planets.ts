@@ -21,6 +21,15 @@ import {
 type PlanetKind = 'violet' | 'amber' | 'rocky' | 'ocean' | 'ice';
 
 const PLANET_PARALLAX_TILT_SCALE = 1.45;
+const PLANET_MATERIAL_SIZE = 192;
+const PLANET_MATERIAL_INDEX: Record<PlanetKind, number> = {
+  violet: 0, amber: 1, rocky: 2, ocean: 3, ice: 4,
+};
+
+export type PlanetSprites = {
+  materials: HTMLCanvasElement;
+  shading: HTMLCanvasElement;
+};
 
 const PLANET_PALETTES: Record<
   PlanetKind,
@@ -66,6 +75,190 @@ const PLANET_SECTION_TINT = {
   rim: 0.5,
   trail: 0.42,
 } as const;
+
+// Material landmarks use permanent seeds; animation rotates the cached artwork.
+// Five material cells and one shading plane retain 864 KiB at every viewport.
+export function createPlanetSprites(): PlanetSprites {
+  const size = PLANET_MATERIAL_SIZE;
+  const materials = document.createElement('canvas');
+  materials.width = size * 5;
+  materials.height = size;
+  const context = materials.getContext('2d');
+  if (context) {
+    for (const kind of Object.keys(PLANET_MATERIAL_INDEX) as PlanetKind[]) {
+      const index = PLANET_MATERIAL_INDEX[kind];
+      const palette = PLANET_PALETTES[kind];
+      const seed = 1709 + index * 821;
+      context.save();
+      context.translate(index * size + size / 2, size / 2);
+      context.scale(size / 2, size / 2);
+      context.beginPath();
+      context.arc(0, 0, 0.995, 0, TAU);
+      context.clip();
+
+      if (kind === 'violet' || kind === 'amber') {
+        // Unequal, meandering ribbons replace equally spaced elliptical stripes.
+        for (let band = 0; band < 25; band += 1) {
+          const y = -1.05 + band * 0.088;
+          const thickness = 0.018 + seededRandom(seed + band * 17) * 0.055;
+          const wave = seededRandom(seed + band * 29) * TAU;
+          context.fillStyle = rgba(
+            band % 4 === 0 ? palette.shadow : band % 3 === 0 ? palette.highlight : palette.feature,
+            0.06 + seededRandom(seed + band * 41) * 0.17,
+          );
+          context.beginPath();
+          for (let step = 0; step <= 40; step += 1) {
+            const x = -1.2 + step * 0.06;
+            const bend = Math.sin(x * 3.4 + wave) * 0.035
+              + Math.sin(x * 10.5 + wave * 0.7) * 0.012;
+            if (step === 0) context.moveTo(x, y + bend);
+            else context.lineTo(x, y + bend);
+          }
+          for (let step = 40; step >= 0; step -= 1) {
+            const x = -1.2 + step * 0.06;
+            const bend = Math.sin(x * 3.4 + wave) * 0.035
+              + Math.sin(x * 10.5 + wave * 0.7) * 0.012;
+            context.lineTo(x, y + bend + thickness * (0.78 + Math.sin(x * 6 + wave) * 0.22));
+          }
+          context.closePath();
+          context.fill();
+        }
+        for (let storm = 0; storm < 3; storm += 1) {
+          const x = storm === 0 ? 0.32 : -0.5 + seededRandom(seed + storm * 67) * 0.8;
+          const y = storm === 0 ? 0.13 : -0.65 + seededRandom(seed + storm * 89) * 1.3;
+          const width = storm === 0 ? 0.2 : 0.06 + storm * 0.023;
+          for (let contour = 0; contour < 5; contour += 1) {
+            const scale = 1 - contour * 0.15;
+            context.strokeStyle = rgba(contour % 2 ? palette.shadow : palette.highlight, 0.16);
+            context.lineWidth = 0.009 + contour * 0.001;
+            context.beginPath();
+            context.ellipse(x, y, width * scale, width * scale * 0.36, -0.12, 0, TAU);
+            context.stroke();
+          }
+        }
+      } else if (kind === 'rocky') {
+        for (let basin = 0; basin < 8; basin += 1) {
+          const x = (seededRandom(seed + basin * 23) - 0.5) * 1.8;
+          const y = (seededRandom(seed + basin * 41) - 0.5) * 1.8;
+          context.fillStyle = rgba(palette.shadow, 0.09);
+          context.beginPath();
+          context.ellipse(x, y, 0.18 + basin * 0.019, 0.12 + basin * 0.014, basin, 0, TAU);
+          context.fill();
+        }
+        for (let crater = 0; crater < 25; crater += 1) {
+          const x = (seededRandom(seed + crater * 31.7) - 0.5) * 1.7;
+          const y = (seededRandom(seed + crater * 47.3) - 0.5) * 1.7;
+          const radius = 0.025 + seededRandom(seed + crater * 67.1) ** 2 * 0.14;
+          const foreshorten = Math.sqrt(Math.max(0.18, 1 - x * x * 0.68));
+          context.fillStyle = rgba(palette.shadow, 0.32);
+          context.beginPath();
+          context.ellipse(x, y, radius * foreshorten, radius, 0, 0, TAU);
+          context.fill();
+          context.lineWidth = 0.008;
+          context.strokeStyle = rgba(palette.highlight, 0.35);
+          context.beginPath();
+          context.ellipse(x, y, radius * foreshorten, radius, 0, Math.PI * 0.95, Math.PI * 1.65);
+          context.stroke();
+          context.strokeStyle = rgba(palette.shadow, 0.3);
+          context.beginPath();
+          context.ellipse(x, y, radius * foreshorten * 0.8, radius * 0.8, 0, -0.1, Math.PI * 0.65);
+          context.stroke();
+        }
+      } else if (kind === 'ocean') {
+        for (let island = 0; island < 9; island += 1) {
+          const x = (seededRandom(seed + island * 29) - 0.5) * 1.5;
+          const y = (seededRandom(seed + island * 53) - 0.5) * 1.65;
+          const radius = 0.05 + seededRandom(seed + island * 71) * 0.25;
+          const phase = seededRandom(seed + island * 97) * TAU;
+          context.fillStyle = rgba(palette.feature, 0.22 + island % 3 * 0.045);
+          context.beginPath();
+          for (let point = 0; point <= 48; point += 1) {
+            const angle = point / 48 * TAU;
+            const coast = radius * (0.76 + Math.sin(angle * 3 + phase) * 0.14
+              + Math.sin(angle * 7 - phase) * 0.09 + Math.sin(angle * 11 + phase) * 0.045);
+            const px = x + Math.cos(angle) * coast;
+            const py = y + Math.sin(angle) * coast * 0.66;
+            if (point === 0) context.moveTo(px, py);
+            else context.lineTo(px, py);
+          }
+          context.closePath();
+          context.fill();
+          context.lineWidth = 0.006;
+          context.strokeStyle = rgba(palette.highlight, 0.12);
+          context.stroke();
+        }
+        for (let cloud = 0; cloud < 12; cloud += 1) {
+          const y = -0.82 + cloud * 0.143;
+          const x = -0.68 + seededRandom(seed + cloud * 113) * 0.75;
+          context.strokeStyle = rgba(palette.highlight, 0.12 + cloud % 3 * 0.045);
+          context.lineWidth = 0.014 + cloud % 3 * 0.006;
+          context.lineCap = 'round';
+          context.beginPath();
+          context.moveTo(x, y);
+          context.bezierCurveTo(x + 0.15, y - 0.08, x + 0.3, y + 0.11, x + 0.58, y - 0.015);
+          context.stroke();
+        }
+      } else {
+        for (let sheet = 0; sheet < 9; sheet += 1) {
+          const x = (seededRandom(seed + sheet * 41) - 0.5) * 1.6;
+          const y = (seededRandom(seed + sheet * 67) - 0.5) * 1.6;
+          context.fillStyle = rgba(palette.highlight, 0.045 + sheet % 3 * 0.025);
+          context.beginPath();
+          context.ellipse(x, y, 0.25 + sheet * 0.012, 0.1 + sheet * 0.009, sheet * 0.73, 0, TAU);
+          context.fill();
+        }
+        for (let fissure = 0; fissure < 7; fissure += 1) {
+          let x = -0.83 + fissure * 0.26;
+          let y = -1.05;
+          context.lineWidth = fissure % 2 ? 0.008 : 0.013;
+          context.strokeStyle = rgba(palette.feature, fissure % 2 ? 0.17 : 0.25);
+          context.beginPath();
+          context.moveTo(x, y);
+          for (let joint = 0; joint < 10; joint += 1) {
+            const dx = (seededRandom(seed + fissure * 71 + joint * 37) - 0.5) * 0.27;
+            x += dx;
+            y += 0.22;
+            context.lineTo(x, y);
+            if (joint % 3 === 1) {
+              context.lineTo(x + dx * 2.8 + 0.09, y + 0.06);
+              context.moveTo(x, y);
+            }
+          }
+          context.stroke();
+        }
+      }
+      // Fine mineral/cloud grain is permanent artwork, not flickering noise.
+      for (let grain = 0; grain < 480; grain += 1) {
+        const x = (seededRandom(seed + grain * 17.3) - 0.5) * 2;
+        const y = (seededRandom(seed + grain * 31.7) - 0.5) * 2;
+        context.fillStyle = rgba(grain % 3 ? palette.highlight : palette.shadow, 0.025 + grain % 4 * 0.01);
+        context.fillRect(x, y, 0.007 + grain % 3 * 0.003, 0.006);
+      }
+      context.restore();
+    }
+  }
+
+  const shading = document.createElement('canvas');
+  shading.width = size;
+  shading.height = size;
+  const shade = shading.getContext('2d');
+  if (shade) {
+    shade.translate(size / 2, size / 2);
+    shade.scale(size / 2, size / 2);
+    shade.beginPath();
+    shade.arc(0, 0, 1, 0, TAU);
+    shade.clip();
+    const terminator = shade.createLinearGradient(-0.58, -0.62, 0.75, 0.72);
+    terminator.addColorStop(0, 'rgba(2,4,18,0)');
+    terminator.addColorStop(0.36, 'rgba(2,4,18,0)');
+    terminator.addColorStop(0.57, 'rgba(2,4,18,0.06)');
+    terminator.addColorStop(0.78, 'rgba(2,4,18,0.34)');
+    terminator.addColorStop(1, 'rgba(2,4,18,0.7)');
+    shade.fillStyle = terminator;
+    shade.fillRect(-1, -1, 2, 2);
+  }
+  return { materials, shading };
+}
 
 type PlanetBase = {
   size: number;
@@ -217,15 +410,11 @@ function drawPlanetSurface(
   y: number,
   radius: number,
   kind: PlanetKind,
-  featureColor: Rgb,
-  highlightColor: Rgb,
-  shadowColor: Rgb,
   renderTheme: CosmicRenderTheme,
   phase: number,
   viewPose: ParallaxPose,
+  sprites: PlanetSprites,
 ) {
-  const { planetSurface } = renderTheme;
-  const featureAlpha = planetSurface.featureAlpha;
   const pitch = Math.sin(viewPose.pitch);
   const yaw = Math.sin(viewPose.yaw);
   context.save();
@@ -236,92 +425,21 @@ function drawPlanetSurface(
   context.rotate(-0.14 + phase * 0.035 + yaw * 0.24);
   context.transform(1, pitch * 0.18, yaw * 0.12, 1, 0, 0);
   context.translate(yaw * radius * 0.72, pitch * radius * 0.62);
-
-  if (kind === 'violet') {
-    for (let band = -4; band <= 4; band += 1) {
-      const offsetY = band * radius * 0.17;
-      context.fillStyle = rgba(
-        band % 2 === 0 ? featureColor : highlightColor,
-        featureAlpha * (band === 0 ? 1.1 : 0.62),
-      );
-      context.beginPath();
-      context.ellipse(0, offsetY, radius * 1.04, radius * (band === 0 ? 0.065 : 0.032), 0, 0, TAU);
-      context.fill();
-    }
-    context.fillStyle = rgba(highlightColor, planetSurface.violetStormAlpha);
-    context.beginPath();
-    context.ellipse(radius * 0.38, radius * 0.12, radius * 0.2, radius * 0.09, -0.08, 0, TAU);
-    context.fill();
-  } else if (kind === 'amber') {
-    for (let band = -2; band <= 2; band += 1) {
-      const offsetY = band * radius * 0.3;
-      context.fillStyle = rgba(
-        band === 0 ? highlightColor : featureColor,
-        featureAlpha * (band === 0 ? 0.95 : 0.58),
-      );
-      context.beginPath();
-      context.ellipse(0, offsetY, radius * 1.05, radius * (band === 0 ? 0.13 : 0.08), 0, 0, TAU);
-      context.fill();
-    }
-  } else if (kind === 'rocky') {
-    context.fillStyle = rgba(shadowColor, planetSurface.rockyShadowAlpha);
-    context.beginPath();
-    context.ellipse(radius * 0.42, 0, radius * 0.7, radius * 1.08, 0.08, 0, TAU);
-    context.fill();
-    for (let crater = 0; crater < 9; crater += 1) {
-      const craterX = (seededRandom(phase * 17 + crater * 3.7) - 0.5) * radius * 1.2;
-      const craterY = (seededRandom(phase * 23 + crater * 5.1) - 0.5) * radius * 1.15;
-      const craterRadius = radius * (0.08 + seededRandom(phase * 29 + crater * 7.3) * 0.11);
-      context.fillStyle = rgba(shadowColor, planetSurface.rockyCraterAlpha);
-      context.beginPath();
-      context.arc(craterX, craterY, craterRadius, 0, TAU);
-      context.fill();
-      context.strokeStyle = rgba(highlightColor, planetSurface.rockyCraterRimAlpha);
-      context.lineWidth = Math.max(0.45, radius * 0.016);
-      context.stroke();
-    }
-  } else if (kind === 'ocean') {
-    context.fillStyle = rgba(featureColor, planetSurface.oceanFeatureAlpha);
-    context.beginPath();
-    context.ellipse(-radius * 0.28, -radius * 0.18, radius * 0.34, radius * 0.21, 0.42, 0, TAU);
-    context.ellipse(radius * 0.3, radius * 0.22, radius * 0.28, radius * 0.18, -0.3, 0, TAU);
-    context.ellipse(radius * 0.18, -radius * 0.5, radius * 0.16, radius * 0.1, 0.16, 0, TAU);
-    context.fill();
-    context.strokeStyle = rgba(highlightColor, planetSurface.oceanCloudAlpha);
-    context.lineWidth = Math.max(0.65, radius * 0.035);
-    context.beginPath();
-    context.arc(-radius * 0.08, -radius * 0.02, radius * 0.7, 0.18, Math.PI * 0.88);
-    context.stroke();
-  } else {
-    context.fillStyle = rgba(highlightColor, planetSurface.iceFacetAlpha);
-    for (let facet = 0; facet < 5; facet += 1) {
-      const angle = (facet / 5) * TAU;
-      context.beginPath();
-      context.moveTo(0, 0);
-      context.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-      context.lineTo(
-        Math.cos(angle + TAU / 5) * radius,
-        Math.sin(angle + TAU / 5) * radius,
-      );
-      context.closePath();
-      if (facet % 2 === 0) context.fill();
-    }
-    context.strokeStyle = rgba(featureColor, planetSurface.iceFissureAlpha);
-    context.lineWidth = Math.max(0.65, radius * 0.038);
-    context.lineCap = 'round';
-    context.beginPath();
-    context.moveTo(-radius * 0.18, -radius * 0.82);
-    context.lineTo(radius * 0.03, -radius * 0.28);
-    context.lineTo(-radius * 0.13, radius * 0.05);
-    context.lineTo(radius * 0.24, radius * 0.72);
-    context.moveTo(radius * 0.03, -radius * 0.28);
-    context.lineTo(radius * 0.48, -radius * 0.08);
-    context.moveTo(-radius * 0.13, radius * 0.05);
-    context.lineTo(-radius * 0.5, radius * 0.38);
-    context.stroke();
-  }
-
+  context.globalAlpha *= renderTheme.planetSurface.featureAlpha / 0.4;
+  context.drawImage(
+    sprites.materials,
+    PLANET_MATERIAL_INDEX[kind] * PLANET_MATERIAL_SIZE,
+    0,
+    PLANET_MATERIAL_SIZE,
+    PLANET_MATERIAL_SIZE,
+    -radius,
+    -radius,
+    radius * 2,
+    radius * 2,
+  );
   context.restore();
+  // Fixed illumination is separate from rotating landmarks and camera tilt.
+  context.drawImage(sprites.shading, x - radius, y - radius, radius * 2, radius * 2);
 }
 
 function drawPlanet(
@@ -335,6 +453,7 @@ function drawPlanet(
   phase: number,
   kind: PlanetKind,
   viewPose: ParallaxPose,
+  sprites: PlanetSprites,
 ) {
   const palette = PLANET_PALETTES[kind];
   const highlightColor = mixRgb(palette.highlight, activeColor, PLANET_SECTION_TINT.highlight);
@@ -355,8 +474,8 @@ function drawPlanet(
   }
 
   const gradient = context.createRadialGradient(
-    x - radius * 0.32 + yaw * radius * 0.78,
-    y - radius * 0.36 + pitch * radius * 0.7,
+    x - radius * 0.32 + yaw * radius * 0.22,
+    y - radius * 0.36 + pitch * radius * 0.18,
     radius * 0.06,
     x,
     y,
@@ -377,25 +496,30 @@ function drawPlanet(
     y,
     radius,
     kind,
-    featureColor,
-    highlightColor,
-    shadowColor,
     renderTheme,
     phase,
     viewPose,
+    sprites,
   );
 
-  context.strokeStyle = rgba(rimColor, atmosphereAlpha);
-  context.lineWidth = Math.max(0.75, radius * 0.025);
+  // A quiet full limb and directional lit rim imply an atmosphere, not a neon disc.
+  context.strokeStyle = rgba(rimColor, atmosphereAlpha * 0.3);
+  context.lineWidth = Math.max(0.6, radius * 0.018);
   context.beginPath();
   context.arc(x, y, radius + context.lineWidth * 0.5, 0, TAU);
   context.stroke();
 
+  context.strokeStyle = rgba(rimColor, atmosphereAlpha * 0.76);
+  context.lineWidth = Math.max(0.65, radius * 0.025);
+  context.beginPath();
+  context.arc(x, y, radius + context.lineWidth * 0.3, Math.PI * 1.03, Math.PI * 1.72);
+  context.stroke();
+
   if (kind === 'ice') {
-    context.strokeStyle = rgba(featureColor, renderTheme.planetAtmosphere.iceOuterAlpha);
+    context.strokeStyle = rgba(featureColor, renderTheme.planetAtmosphere.iceOuterAlpha * 0.48);
     context.lineWidth = Math.max(0.6, radius * 0.022);
     context.beginPath();
-    context.arc(x, y, radius * 1.16, 0, TAU);
+    context.arc(x, y, radius * 1.08, Math.PI * 1.03, Math.PI * 1.72);
     context.stroke();
   }
 
@@ -533,6 +657,7 @@ export function drawPlanets(
   activeColor: Rgb,
   renderTheme: CosmicRenderTheme,
   layer: PlanetLayer,
+  sprites: PlanetSprites,
 ) {
   for (const { planet, x, y, radius, surfacePhase, viewPose } of states) {
     const belongsToLayer = layer === 'distant-rogue'
@@ -575,6 +700,7 @@ export function drawPlanets(
       surfacePhase,
       planet.kind,
       viewPose,
+      sprites,
     );
     context.restore();
   }

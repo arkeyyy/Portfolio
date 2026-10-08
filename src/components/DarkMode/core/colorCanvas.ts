@@ -107,17 +107,17 @@ export function drawStar(
   alpha: number,
 ) {
   if (size > 1.75) {
-    context.fillStyle = rgba(color, alpha * 0.12);
+    context.fillStyle = rgba(color, alpha * 0.075);
     context.beginPath();
-    context.arc(x, y, size * 2.7, 0, TAU);
+    context.arc(x, y, size * 2.35, 0, TAU);
     context.fill();
   }
 
-  const coreSize = Math.max(0.55, size * 0.68);
+  const coreSize = Math.max(0.55, size * 0.74);
   if (size > 1.15) {
     const armLength = size * 1.9;
     const armWidth = Math.max(0.38, coreSize * 0.35);
-    context.fillStyle = rgba(color, alpha * 0.3);
+    context.fillStyle = rgba(color, alpha * 0.26);
     context.fillRect(x - armLength, y - armWidth * 0.5, armLength * 2, armWidth);
     context.fillRect(x - armWidth * 0.5, y - armLength, armWidth, armLength * 2);
   }

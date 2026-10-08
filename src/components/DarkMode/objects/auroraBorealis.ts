@@ -100,6 +100,42 @@ function createAuroraAlphaSprite() {
   }
   context.filter = 'none';
 
+  // Fine folds run with the existing curtains, rather than becoming separate
+  // beams. Keep their uneven tips and luminous lower hem inside the same mask.
+  context.lineCap = 'round';
+  context.filter = 'blur(0.55px)';
+  for (let fold = 0; fold < 84; fold += 1) {
+    const seed = 51_700 + fold * 31.7;
+    const position = (fold + seededRandom(seed)) / 84;
+    const x = canvas.width * (0.055 + position * 0.88);
+    const orbitX = -0.48 + position * 1.4;
+    const ellipseHeight = Math.sqrt(Math.max(0, 1 - orbitX * orbitX));
+    const baseY = canvas.height * (0.54 + (1 - ellipseHeight) * 0.68);
+    const foldHeight = Math.min(
+      baseY - canvas.height * 0.065,
+      canvas.height * (0.14 + seededRandom(seed + 3.1) * 0.42),
+    );
+    const topY = baseY - foldHeight;
+    const bend = (seededRandom(seed + 5.3) - 0.5) * 17;
+    const alpha = 0.018 + seededRandom(seed + 7.7) * 0.043;
+    const glow = context.createLinearGradient(0, topY, 0, baseY);
+    glow.addColorStop(0, 'rgba(255,255,255,0)');
+    glow.addColorStop(0.4, `rgba(255,255,255,${alpha * 0.45})`);
+    glow.addColorStop(0.83, `rgba(255,255,255,${alpha})`);
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    context.strokeStyle = glow;
+    context.lineWidth = 0.5 + seededRandom(seed + 9.1) * 0.85;
+    context.beginPath();
+    context.moveTo(x + bend * 0.4, topY);
+    context.bezierCurveTo(
+      x + bend, topY + foldHeight * 0.3,
+      x - bend * 0.25, topY + foldHeight * 0.75,
+      x, baseY,
+    );
+    context.stroke();
+  }
+  context.filter = 'none';
+
   context.globalCompositeOperation = 'destination-in';
   const horizontalFade = context.createLinearGradient(0, 0, canvas.width, 0);
   horizontalFade.addColorStop(0, 'rgba(255, 255, 255, 0)');

@@ -19,6 +19,7 @@ type DistantCycloneAlphaSprites = {
 
 export type DistantCycloneSprites = DistantCycloneAlphaSprites & {
   sparkField: HTMLCanvasElement;
+  core: HTMLCanvasElement;
 };
 
 export type DistantCyclone = {
@@ -43,7 +44,7 @@ type CycloneBandSpec = {
 };
 
 const CYCLONE_CLOUD_ENVELOPE_SCALE = 1.075;
-const CYCLONE_CLOUD_NORMAL_SCATTER = 1.1;
+const CYCLONE_CLOUD_NORMAL_SCATTER = 0.82;
 const CYCLONE_CLOUD_TANGENT_SCATTER = 0.62;
 const CYCLONE_BAND_SPECS: readonly CycloneBandSpec[] = [
   {
@@ -191,6 +192,36 @@ function getCycloneBandPoint(spec: CycloneBandSpec, progress: number) {
   };
 }
 
+function drawCycloneConnectedWisps(context: CanvasRenderingContext2D, spec: CycloneBandSpec) {
+  context.save();
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  for (let strand = 0; strand < 4; strand += 1) {
+    context.filter = strand === 0 ? 'blur(3px)' : 'blur(0.7px)';
+    context.strokeStyle = rgba(CYCLONE_STAR_WHITE, strand === 0 ? 0.08 : 0.105);
+    context.lineWidth = strand === 0 ? 7 : 0.85 + strand * 0.36;
+    context.beginPath();
+    let disconnected = true;
+    for (let sample = 0; sample <= 96; sample += 1) {
+      const progress = sample / 96;
+      if (spec.gaps.some(([start, end]) => progress >= start && progress <= end)) {
+        disconnected = true;
+        continue;
+      }
+      const point = getCycloneBandPoint(spec, progress);
+      const offset = Math.sin(progress * TAU * 2.2 + strand) * 1.8 + (strand - 1.5) * 2.8;
+      const normal = point.tangentAngle + Math.PI * 0.5;
+      const x = point.x * CYCLONE_CLOUD_ENVELOPE_SCALE + Math.cos(normal) * offset;
+      const y = point.y * CYCLONE_CLOUD_ENVELOPE_SCALE + Math.sin(normal) * offset;
+      if (disconnected) context.moveTo(x, y);
+      else context.lineTo(x, y);
+      disconnected = false;
+    }
+    context.stroke();
+  }
+  context.restore();
+}
+
 function createDistantCycloneAlphaSprites(): DistantCycloneAlphaSprites | null {
   const purpleHaze = document.createElement('canvas');
   const cyanClouds = document.createElement('canvas');
@@ -221,6 +252,7 @@ function createDistantCycloneAlphaSprites(): DistantCycloneAlphaSprites | null {
 
   drawCycloneCloudPuff(hazeContext, 0, 0, 158, 0.07, 1, 0);
   for (const [bandIndex, spec] of CYCLONE_BAND_SPECS.entries()) {
+    drawCycloneConnectedWisps(cyanContext, spec);
     for (let puff = 0; puff < spec.puffCount; puff += 1) {
       const progress = puff / (spec.puffCount - 1);
       const gapPosition = (puff + spec.gapOffset) % 23;
@@ -273,9 +305,9 @@ function createDistantCycloneAlphaSprites(): DistantCycloneAlphaSprites | null {
           crestContext,
           cloudX + Math.cos(normalAngle) * crestOffset,
           cloudY + Math.sin(normalAngle) * crestOffset,
-          puffRadius * (0.34 + seededRandom(seed + 13.9) * 0.3),
-          0.4 + seededRandom(seed + 16.1) * 0.28,
-          1.06 + seededRandom(seed + 18.3) * 0.3,
+          puffRadius * (0.25 + seededRandom(seed + 13.9) * 0.2),
+          0.25 + seededRandom(seed + 16.1) * 0.2,
+          1.6 + seededRandom(seed + 18.3) * 0.6,
           rotation,
         );
       }
@@ -300,7 +332,7 @@ function createDistantCycloneAlphaSprites(): DistantCycloneAlphaSprites | null {
     const radius = 10 + Math.pow(seededRandom(seed + 2.3), 0.7) * 66;
     const x = Math.cos(angle) * radius;
     const y = Math.sin(angle) * radius * 0.9;
-    const puffRadius = 10 + seededRandom(seed + 4.7) * 15;
+    const puffRadius = 8 + seededRandom(seed + 4.7) * 11;
     drawCycloneCloudPuff(
       hazeContext,
       x,
@@ -315,7 +347,7 @@ function createDistantCycloneAlphaSprites(): DistantCycloneAlphaSprites | null {
       x,
       y,
       puffRadius,
-      0.3 + seededRandom(seed + 7.1) * 0.28,
+      0.22 + seededRandom(seed + 7.1) * 0.2,
       1.04 + seededRandom(seed + 9.3) * 0.32,
       angle,
     );
@@ -325,7 +357,7 @@ function createDistantCycloneAlphaSprites(): DistantCycloneAlphaSprites | null {
         x,
         y,
         puffRadius * 0.38,
-        0.62,
+        0.4,
         1.08,
         angle,
       );
@@ -443,6 +475,23 @@ function createCycloneGradientTintCanvas(
   return { canvas, context };
 }
 
+function createCycloneCoreSprite() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const core = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+  core.addColorStop(0, rgba(CYCLONE_CLOUD_WHITE, 1));
+  core.addColorStop(0.08, rgba(CYCLONE_CLOUD_WHITE, 0.88));
+  core.addColorStop(0.24, rgba(CYCLONE_CLOUD_PINK, 0.55));
+  core.addColorStop(0.55, rgba(CYCLONE_CLOUD_PURPLE, 0.15));
+  core.addColorStop(1, rgba(CYCLONE_CLOUD_PURPLE, 0));
+  context.fillStyle = core;
+  context.fillRect(0, 0, 128, 128);
+  return canvas;
+}
+
 export function createDistantCycloneSprites(): DistantCycloneSprites | null {
   const alphaSprites = createDistantCycloneAlphaSprites();
   if (!alphaSprites) return null;
@@ -490,12 +539,19 @@ export function createDistantCycloneSprites(): DistantCycloneSprites | null {
     || !pinkTint.context
   ) return null;
 
+  // The tinted canvases own the artwork now; release temporary alpha storage.
+  for (const canvas of Object.values(alphaSprites)) {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+
   return {
     purpleHaze: hazeTint.canvas,
     cyanClouds: cyanTint.canvas,
     whiteCrests: crestTint.canvas,
     pinkClouds: pinkTint.canvas,
     sparkField: createCycloneSparkFieldSprite(),
+    core: createCycloneCoreSprite(),
   };
 }
 
@@ -569,39 +625,13 @@ export function drawDistantCyclone(
 
   context.save();
   context.scale(1, cycloneHeight / cycloneWidth);
-  const coreRadius = cycloneWidth * 0.25;
-  const coreGlow = context.createRadialGradient(0, 0, 0, 0, 0, coreRadius);
-  coreGlow.addColorStop(
-    0,
-    rgba(
-      CYCLONE_CLOUD_WHITE,
-      renderTheme.distantCyclone.coreAlpha * corePulse,
-    ),
+  const coreRadius = cycloneWidth * 0.2;
+  context.globalAlpha = renderTheme.distantCyclone.coreAlpha * corePulse;
+  context.drawImage(
+    cyclone.sprites.core,
+    -coreRadius, -coreRadius,
+    coreRadius * 2, coreRadius * 2,
   );
-  coreGlow.addColorStop(
-    0.14,
-    rgba(
-      CYCLONE_CLOUD_WHITE,
-      renderTheme.distantCyclone.coreAlpha * corePulse * 0.92,
-    ),
-  );
-  coreGlow.addColorStop(
-    0.34,
-    rgba(
-      CYCLONE_CLOUD_PINK,
-      renderTheme.distantCyclone.coreAlpha * corePulse * 0.76,
-    ),
-  );
-  coreGlow.addColorStop(
-    0.62,
-    rgba(
-      CYCLONE_CLOUD_PURPLE,
-      renderTheme.distantCyclone.coreAlpha * corePulse * 0.2,
-    ),
-  );
-  coreGlow.addColorStop(1, rgba(CYCLONE_CLOUD_PURPLE, 0));
-  context.fillStyle = coreGlow;
-  context.fillRect(-coreRadius, -coreRadius, coreRadius * 2, coreRadius * 2);
   context.restore();
 
   context.save();

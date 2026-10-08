@@ -71,6 +71,8 @@ export function traceProjectedOrbit(
   orbit: OrbitGeometry,
   laneScale: number,
   layer: DepthFieldLayer,
+  startAngle = 0,
+  endAngle = TAU,
 ) {
   if (Math.abs(parallax.positionX) + Math.abs(parallax.positionY) < 0.001) {
     context.beginPath();
@@ -80,20 +82,20 @@ export function traceProjectedOrbit(
       orbit.radiusX * laneScale,
       orbit.radiusY * laneScale,
       orbit.tilt,
-      0,
-      TAU,
+      startAngle,
+      endAngle,
     );
     return;
   }
 
   const cosTilt = Math.cos(orbit.tilt);
   const sinTilt = Math.sin(orbit.tilt);
-  const segmentCount = compact ? 56 : 80;
+  const segmentCount = Math.ceil((compact ? 56 : 80) * (endAngle - startAngle) / TAU);
   const projection: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
 
   context.beginPath();
   for (let segment = 0; segment <= segmentCount; segment += 1) {
-    const angle = segment / segmentCount * TAU;
+    const angle = startAngle + segment / segmentCount * (endAngle - startAngle);
     const localX = Math.cos(angle) * orbit.radiusX * laneScale;
     const localY = Math.sin(angle) * orbit.radiusY * laneScale;
     const x = orbit.centerX + localX * cosTilt - localY * sinTilt;
@@ -110,7 +112,7 @@ export function traceProjectedOrbit(
     if (segment === 0) context.moveTo(projection.x, projection.y);
     else context.lineTo(projection.x, projection.y);
   }
-  context.closePath();
+  if (endAngle - startAngle >= TAU) context.closePath();
 }
 
 export function drawSecondaryRingSystem(
@@ -140,7 +142,7 @@ export function drawSecondaryRingSystem(
 
     context.setLineDash([]);
     context.lineWidth = 0.55 + lane * 0.16;
-    context.strokeStyle = rgba(ringColor, baseAlpha * laneAlpha);
+    context.strokeStyle = rgba(ringColor, baseAlpha * laneAlpha * 0.9);
     context.stroke();
 
     context.setLineDash([
@@ -151,7 +153,17 @@ export function drawSecondaryRingSystem(
     ]);
     context.lineDashOffset = -motionTime * ring.dashSpeed + lane * ring.radiusX * 0.13;
     context.lineWidth = 0.9 + lane * 0.12;
-    context.strokeStyle = rgba(ringColor, dashAlpha * laneAlpha);
+    context.strokeStyle = rgba(ringColor, dashAlpha * laneAlpha * 0.9);
+    context.stroke();
+
+    // The front half shares the original path and dash phase; a faint narrow
+    // crest gives it definition while the far half remains atmospheric.
+    traceProjectedOrbit(context, compact, parallax, ring, laneScale, depthLayer, 0, Math.PI);
+    context.strokeStyle = rgba(ringColor, dashAlpha * laneAlpha * 0.2);
+    context.stroke();
+    context.setLineDash([]);
+    context.lineWidth = 0.55 + lane * 0.16;
+    context.strokeStyle = rgba(ringColor, baseAlpha * laneAlpha * 0.2);
     context.stroke();
   }
 

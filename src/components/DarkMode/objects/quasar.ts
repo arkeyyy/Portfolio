@@ -33,8 +33,8 @@ export function createQuasarSprite() {
   const center = canvas.width * 0.5;
 
   const outerGlow = context.createRadialGradient(center, center, 0, center, center, 142);
-  outerGlow.addColorStop(0, rgba(QUASAR_LIGHT_BLUE, 0.2));
-  outerGlow.addColorStop(0.22, rgba(QUASAR_PURPLE, 0.13));
+  outerGlow.addColorStop(0, rgba(QUASAR_LIGHT_BLUE, 0.16));
+  outerGlow.addColorStop(0.22, rgba(QUASAR_PURPLE, 0.115));
   outerGlow.addColorStop(0.58, rgba(QUASAR_LIGHT_BLUE, 0.035));
   outerGlow.addColorStop(1, rgba(QUASAR_PURPLE, 0));
   context.fillStyle = outerGlow;
@@ -103,14 +103,40 @@ export function createQuasarSprite() {
   context.stroke();
 
   context.filter = 'none';
-  const core = context.createRadialGradient(0, 0, 0, 0, 0, 23);
+  // Sharper accretion strands sit inside the existing bloom. Unequal gaps and
+  // a brighter near edge read as structure instead of another luminous halo.
+  context.lineCap = 'round';
+  for (let strand = 0; strand < 7; strand += 1) {
+    const seed = 52_900 + strand * 27.1;
+    const radius = 39 + strand * 6.8;
+    const start = seededRandom(seed) * TAU;
+    context.strokeStyle = rgba(
+      strand % 3 === 0 ? QUASAR_PURPLE : QUASAR_LIGHT_BLUE,
+      0.2 + seededRandom(seed + 2.3) * 0.22,
+    );
+    context.lineWidth = 0.6 + seededRandom(seed + 4.7) * 0.85;
+    context.beginPath();
+    context.ellipse(0, 0, radius, radius * 0.145, 0, start, start + 1.4 + seededRandom(seed + 7.1));
+    context.stroke();
+  }
+  context.strokeStyle = 'rgba(216,243,255,0.58)';
+  context.lineWidth = 1.15;
+  context.beginPath();
+  context.ellipse(0, 0, 79, 11.4, 0, 0.18, Math.PI - 0.24);
+  context.stroke();
+
+  const core = context.createRadialGradient(0, 0, 0, 0, 0, 18);
   core.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  core.addColorStop(0.16, rgba(QUASAR_LIGHT_BLUE, 0.96));
-  core.addColorStop(0.5, rgba(QUASAR_PURPLE, 0.42));
+  core.addColorStop(0.13, rgba(QUASAR_LIGHT_BLUE, 0.96));
+  core.addColorStop(0.42, rgba(QUASAR_PURPLE, 0.34));
   core.addColorStop(1, rgba(QUASAR_PURPLE, 0));
   context.fillStyle = core;
   context.beginPath();
-  context.arc(0, 0, 23, 0, TAU);
+  context.arc(0, 0, 18, 0, TAU);
+  context.fill();
+  context.fillStyle = 'rgba(255,255,255,0.94)';
+  context.beginPath();
+  context.ellipse(0, 0, 2.4, 1.8, 0, 0, TAU);
   context.fill();
   context.restore();
 

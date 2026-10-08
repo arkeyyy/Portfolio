@@ -10,6 +10,7 @@ import {
 import { seededRandom, snapToPixel, TAU } from '../core/math';
 import {
   CLOUD_ACCENT,
+  DEEP_SPACE,
   DEFAULT_ACTIVE_COLOR,
 } from '../core/theme';
 import type { SecondaryRingSystem } from './cosmicRingShared';
@@ -17,6 +18,7 @@ import type { SecondaryRingSystem } from './cosmicRingShared';
 const VORTEX_STAR_WHITE: Rgb = [246, 249, 255];
 
 export type VortexSprites = {
+  darkCore: HTMLCanvasElement;
   alpha: HTMLCanvasElement;
   active: HTMLCanvasElement;
   accent: HTMLCanvasElement;
@@ -82,12 +84,14 @@ function createVortexAlphaSprite() {
   context.filter = 'blur(0.75px)';
   for (let filament = 0; filament < 38; filament += 1) {
     const seed = 7200 + filament * 43.9;
-    const phase = seededRandom(seed + 1.1) * TAU;
-    const turns = 1.15 + seededRandom(seed + 3.7) * 0.9;
+    const stream = filament % 4;
+    const phase = stream * TAU / 4 + Math.floor(filament / 4) * 0.043
+      + (seededRandom(seed + 1.1) - 0.5) * 0.12;
+    const turns = 1.3 + seededRandom(seed + 3.7) * 0.2;
     const startRadius = 12 + seededRandom(seed + 5.9) * 34;
     const reach = 158 + seededRandom(seed + 8.3) * 88;
-    context.strokeStyle = `rgba(255, 255, 255, ${0.085 + seededRandom(seed + 10.7) * 0.15})`;
-    context.lineWidth = 0.85 + seededRandom(seed + 12.1) * 3.3;
+    context.strokeStyle = `rgba(255, 255, 255, ${0.07 + seededRandom(seed + 10.7) * 0.13})`;
+    context.lineWidth = 0.65 + seededRandom(seed + 12.1) * 2.4;
     context.setLineDash([
       16 + seededRandom(seed + 14.3) * 34,
       5 + seededRandom(seed + 16.7) * 15,
@@ -141,8 +145,9 @@ function createVortexAlphaSprite() {
     centerY,
     canvas.width * 0.49,
   );
-  edgeFade.addColorStop(0, 'rgba(255, 255, 255, 0.38)');
-  edgeFade.addColorStop(0.1, 'rgba(255, 255, 255, 0.82)');
+  edgeFade.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  edgeFade.addColorStop(0.055, 'rgba(255, 255, 255, 0.08)');
+  edgeFade.addColorStop(0.13, 'rgba(255, 255, 255, 0.78)');
   edgeFade.addColorStop(0.28, 'rgba(255, 255, 255, 1)');
   edgeFade.addColorStop(0.76, 'rgba(255, 255, 255, 0.88)');
   edgeFade.addColorStop(1, 'rgba(255, 255, 255, 0)');
@@ -154,6 +159,22 @@ function createVortexAlphaSprite() {
   return canvas;
 }
 
+function createVortexDarkCore() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 96;
+  canvas.height = 96;
+  const context = canvas.getContext('2d');
+  if (!context) return canvas;
+  const shadow = context.createRadialGradient(48, 48, 0, 48, 48, 48);
+  shadow.addColorStop(0, rgba(DEEP_SPACE, 0.82));
+  shadow.addColorStop(0.34, rgba(DEEP_SPACE, 0.66));
+  shadow.addColorStop(0.7, rgba(DEEP_SPACE, 0.18));
+  shadow.addColorStop(1, rgba(DEEP_SPACE, 0));
+  context.fillStyle = shadow;
+  context.fillRect(0, 0, 96, 96);
+  return canvas;
+}
+
 export function createVortexSprites(): VortexSprites | null {
   const alpha = createVortexAlphaSprite();
   const activeTint = createTintCanvas(alpha, DEFAULT_ACTIVE_COLOR);
@@ -161,6 +182,7 @@ export function createVortexSprites(): VortexSprites | null {
   if (!activeTint.context || !accentTint.context) return null;
 
   return {
+    darkCore: createVortexDarkCore(),
     alpha,
     active: activeTint.canvas,
     accent: accentTint.canvas,
@@ -247,13 +269,23 @@ export function drawVortex(
 
   context.save();
   context.scale(1, vortexHeight / vortexWidth);
+  context.globalCompositeOperation = 'source-over';
+  const darkCoreSize = vortexWidth * 0.19;
+  context.drawImage(
+    vortex.sprites.darkCore,
+    -darkCoreSize * 0.5, -darkCoreSize * 0.5,
+    darkCoreSize, darkCoreSize,
+  );
+  context.globalCompositeOperation = renderTheme.cloudCompositeOperation;
   const coreRadius = vortexWidth * 0.31;
   const coreGlow = context.createRadialGradient(0, 0, 0, 0, 0, coreRadius);
   coreGlow.addColorStop(
     0,
-    rgba(mixRgb(activeColor, accentColor, 0.44), renderTheme.vortex.coreAlpha),
+    rgba(mixRgb(activeColor, accentColor, 0.44), renderTheme.vortex.coreAlpha * 0.035),
   );
-  coreGlow.addColorStop(0.46, rgba(accentColor, renderTheme.vortex.coreAlpha * 0.55));
+  coreGlow.addColorStop(0.18, rgba(accentColor, renderTheme.vortex.coreAlpha * 0.08));
+  coreGlow.addColorStop(0.42, rgba(accentColor, renderTheme.vortex.coreAlpha * 0.48));
+  coreGlow.addColorStop(0.68, rgba(accentColor, renderTheme.vortex.coreAlpha * 0.16));
   coreGlow.addColorStop(1, rgba(accentColor, 0));
   context.fillStyle = coreGlow;
   context.fillRect(-coreRadius, -coreRadius, coreRadius * 2, coreRadius * 2);

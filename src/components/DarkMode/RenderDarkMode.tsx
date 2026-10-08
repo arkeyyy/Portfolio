@@ -73,10 +73,17 @@ import { drawBackgroundWash } from './objects/backgroundWash';
 import { EdgeGlows } from './objects/edgeGlows';
 import {
   createPlanets,
+  createPlanetSprites,
   drawPlanets,
   getPlanetRenderStates,
 } from './objects/planets';
-import type { Planet } from './objects/planets';
+import type { Planet, PlanetSprites } from './objects/planets';
+import {
+  createOrbitalDust,
+  createOrbitalDustSprites,
+  drawOrbitalDust,
+} from './objects/orbitalDust';
+import type { OrbitalDustField } from './objects/orbitalDust';
 import {
   createVortex,
   createVortexSprites,
@@ -116,6 +123,9 @@ type Scene = {
   starClusters: StarCluster[];
   ringParticles: RingParticle[];
   planets: Planet[];
+  planetSprites: PlanetSprites;
+  orbitalDust: OrbitalDustField;
+  orbitalDustSprites: HTMLCanvasElement;
   orbit: OrbitGeometry;
   secondaryRings: {
     distant: SecondaryRingSystem;
@@ -216,6 +226,8 @@ type DarkModeSpriteBundle = {
   cancerSprites: ConstellationSprites;
   vortexSprites: VortexSprites;
   distantCycloneSprites: DistantCycloneSprites;
+  planetSprites: PlanetSprites;
+  orbitalDustSprites: HTMLCanvasElement;
 };
 
 let darkModeSpriteCache: DarkModeSpriteBundle | null = null;
@@ -230,6 +242,8 @@ function getDarkModeSpriteBundle(): DarkModeSpriteBundle | null {
   const cancerSprites = createCancerSprites();
   const vortexSprites = createVortexSprites();
   const distantCycloneSprites = createDistantCycloneSprites();
+  const planetSprites = createPlanetSprites();
+  const orbitalDustSprites = createOrbitalDustSprites();
   if (
     !cloudSprites
     || !auroraSprites
@@ -245,6 +259,8 @@ function getDarkModeSpriteBundle(): DarkModeSpriteBundle | null {
     cancerSprites,
     vortexSprites,
     distantCycloneSprites,
+    planetSprites,
+    orbitalDustSprites,
   };
   return darkModeSpriteCache;
 }
@@ -266,6 +282,8 @@ function createScene(
   vortexSprites: VortexSprites,
   distantCycloneSprites: DistantCycloneSprites,
   pixelRatio: number,
+  planetSprites: PlanetSprites,
+  orbitalDustSprites: HTMLCanvasElement,
 ): Scene {
   const compact = width < 720;
   const stars = createFieldStars(width, height, compact);
@@ -293,6 +311,9 @@ function createScene(
     starClusters,
     ringParticles,
     planets,
+    planetSprites,
+    orbitalDust: createOrbitalDust(compact),
+    orbitalDustSprites,
     orbit,
     secondaryRings,
     clouds,
@@ -401,6 +422,7 @@ function drawScene(
     activeColor,
     renderTheme,
     'distant-rogue',
+    scene.planetSprites,
   );
   drawAtParallaxDepth(context, parallax, PARALLAX_DEPTH.distant, (viewPose) => {
     drawQuasar(
@@ -481,6 +503,7 @@ function drawScene(
     activeColor,
     renderTheme,
     'rogue',
+    scene.planetSprites,
   );
   drawOnDepthFieldSurface(context, mainRingSurface, () => {
     drawAuroraBorealis(
@@ -512,6 +535,28 @@ function drawScene(
     time,
     activeColor,
     renderTheme,
+    reducedMotion,
+    parallax,
+  );
+  drawOrbitalDust(
+    context,
+    scene,
+    scene.orbitalDust,
+    scene.orbitalDustSprites,
+    scene.orbit,
+    'main',
+    time,
+    reducedMotion,
+    parallax,
+  );
+  drawOrbitalDust(
+    context,
+    scene,
+    scene.orbitalDust,
+    scene.orbitalDustSprites,
+    scene.secondaryRings.inner,
+    'inner',
+    time,
     reducedMotion,
     parallax,
   );
@@ -605,6 +650,7 @@ function drawScene(
     activeColor,
     renderTheme,
     'orbit',
+    scene.planetSprites,
   );
   context.globalAlpha = 1;
   context.globalCompositeOperation = 'source-over';
@@ -654,6 +700,8 @@ export default function RenderDarkMode({
       cancerSprites,
       vortexSprites,
       distantCycloneSprites,
+      planetSprites,
+      orbitalDustSprites,
     } = sprites;
 
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -1006,6 +1054,8 @@ export default function RenderDarkMode({
         vortexSprites,
         distantCycloneSprites,
         dpr,
+        planetSprites,
+        orbitalDustSprites,
       );
       styledParallaxX = Number.NaN;
       styledParallaxY = Number.NaN;

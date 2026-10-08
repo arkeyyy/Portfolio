@@ -15,6 +15,7 @@ import {
 } from '../core/parallax';
 import { DEPTH_FIELD_LAYERS } from '../core/theme';
 import type { NebulaSprites } from './nebulaAssets';
+import { drawNebulaFilaments } from './nebulaFilaments';
 
 type NebulaGlowLobe = {
   offsetX: number;
@@ -102,6 +103,14 @@ export function drawNebulaGlow(
       -cloudHeight * 0.5,
       cloudWidth,
       cloudHeight,
+    );
+    drawNebulaFilaments(
+      context,
+      sprites.filaments,
+      cloudWidth,
+      cloudHeight,
+      motionTime,
+      renderTheme.clouds.activeAlpha * surface.alphaScale * (viewport.compact ? 0.7 : 1),
     );
     context.restore();
 
