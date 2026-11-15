@@ -4,7 +4,7 @@ import type {
   ParallaxFrame,
   Rgb,
 } from '../core/contracts';
-import { drawStar, mixRgb } from '../core/colorCanvas';
+import { mixRgb, rgba } from '../core/colorCanvas';
 import { clamp, seededRandom, smoothstep, TAU } from '../core/math';
 import { projectAtParallaxDepth } from '../core/parallax';
 import {
@@ -68,9 +68,9 @@ export function drawFieldStars(
   reducedMotion: boolean,
   parallax: ParallaxFrame,
 ) {
+  const motionTime = reducedMotion ? 0 : time;
   const projection: DepthFieldProjection = { x: 0, y: 0, scale: 1, alphaScale: 1 };
   for (const star of stars) {
-    const motionTime = reducedMotion ? 0 : time;
     const baseX = star.x * width
       + Math.sin(motionTime * 0.00022 + star.phase) * 13 * star.depth;
     const baseY = star.y * height
@@ -90,19 +90,47 @@ export function drawFieldStars(
     const color = getAnimatedFieldStarColor(
       star.colorSeed,
       star.colorOffset,
-      reducedMotion ? 0 : time,
+      motionTime,
     );
     const alpha = renderTheme.fieldStarAlpha
       * star.depth
       * twinkle
       * projection.alphaScale;
-    drawStar(
-      context,
-      projection.x,
-      projection.y,
-      star.size * (0.62 + star.depth * 0.84) * projection.scale,
-      color,
-      alpha,
+    const coreSize = Math.max(
+      0.46,
+      star.size * (0.42 + star.depth * 0.28) * projection.scale,
+    );
+    // Most stars stay pinpoints. Only the closest bright seeds carry a
+    // tapered diffraction cross, giving the field a clear magnitude hierarchy.
+    const diffraction = star.size > 2.08 && star.depth > 0.72;
+    if (diffraction) {
+      const horizontalArm = coreSize * 3.3;
+      const verticalArm = horizontalArm * 1.22;
+      const waist = coreSize * 0.22;
+      context.fillStyle = rgba(color, alpha * 0.36);
+      context.beginPath();
+      context.moveTo(projection.x, projection.y - verticalArm);
+      context.lineTo(projection.x + waist, projection.y - waist);
+      context.lineTo(projection.x + horizontalArm, projection.y);
+      context.lineTo(projection.x + waist, projection.y + waist);
+      context.lineTo(projection.x, projection.y + verticalArm);
+      context.lineTo(projection.x - waist, projection.y + waist);
+      context.lineTo(projection.x - horizontalArm, projection.y);
+      context.lineTo(projection.x - waist, projection.y - waist);
+      context.closePath();
+      context.fill();
+      context.fillStyle = rgba(color, alpha * 0.09);
+      context.beginPath();
+      context.arc(projection.x, projection.y, coreSize * 1.7, 0, TAU);
+      context.fill();
+    }
+
+    context.fillStyle = rgba(color, alpha * (diffraction ? 1.65 : 1.12));
+    context.fillRect(
+      projection.x - coreSize * 0.5,
+      projection.y - coreSize * 0.5,
+      coreSize,
+      coreSize,
     );
   }
 }

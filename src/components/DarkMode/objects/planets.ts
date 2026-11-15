@@ -109,16 +109,21 @@ export function createPlanetSprites(): PlanetSprites {
           context.beginPath();
           for (let step = 0; step <= 40; step += 1) {
             const x = -1.2 + step * 0.06;
+            const latitudeCurve = 0.78 + Math.sqrt(Math.max(0, 1 - x * x)) * 0.22;
             const bend = Math.sin(x * 3.4 + wave) * 0.035
               + Math.sin(x * 10.5 + wave * 0.7) * 0.012;
-            if (step === 0) context.moveTo(x, y + bend);
-            else context.lineTo(x, y + bend);
+            if (step === 0) context.moveTo(x, (y + bend) * latitudeCurve);
+            else context.lineTo(x, (y + bend) * latitudeCurve);
           }
           for (let step = 40; step >= 0; step -= 1) {
             const x = -1.2 + step * 0.06;
+            const latitudeCurve = 0.78 + Math.sqrt(Math.max(0, 1 - x * x)) * 0.22;
             const bend = Math.sin(x * 3.4 + wave) * 0.035
               + Math.sin(x * 10.5 + wave * 0.7) * 0.012;
-            context.lineTo(x, y + bend + thickness * (0.78 + Math.sin(x * 6 + wave) * 0.22));
+            context.lineTo(
+              x,
+              (y + bend + thickness * (0.78 + Math.sin(x * 6 + wave) * 0.22)) * latitudeCurve,
+            );
           }
           context.closePath();
           context.fill();
@@ -243,19 +248,33 @@ export function createPlanetSprites(): PlanetSprites {
   shading.height = size;
   const shade = shading.getContext('2d');
   if (shade) {
-    shade.translate(size / 2, size / 2);
-    shade.scale(size / 2, size / 2);
-    shade.beginPath();
-    shade.arc(0, 0, 1, 0, TAU);
-    shade.clip();
-    const terminator = shade.createLinearGradient(-0.58, -0.62, 0.75, 0.72);
-    terminator.addColorStop(0, 'rgba(2,4,18,0)');
-    terminator.addColorStop(0.36, 'rgba(2,4,18,0)');
-    terminator.addColorStop(0.57, 'rgba(2,4,18,0.06)');
-    terminator.addColorStop(0.78, 'rgba(2,4,18,0.34)');
-    terminator.addColorStop(1, 'rgba(2,4,18,0.7)');
-    shade.fillStyle = terminator;
-    shade.fillRect(-1, -1, 2, 2);
+    // Surface normals curve the terminator around the sphere instead of laying
+    // a flat diagonal shadow over its landmarks. Bake the thin scattering rim
+    // into this same plane; lighting costs exactly one cached draw per planet.
+    const pixels = shade.createImageData(size, size);
+    for (let py = 0; py < size; py += 1) {
+      const ny = (py + 0.5) / size * 2 - 1;
+      for (let px = 0; px < size; px += 1) {
+        const nx = (px + 0.5) / size * 2 - 1;
+        const radiusSquared = nx * nx + ny * ny;
+        if (radiusSquared >= 1) continue;
+        const nz = Math.sqrt(1 - radiusSquared);
+        const illumination = nx * -0.57 + ny * -0.48 + nz * 0.667;
+        const shadeAmount = clamp((0.37 - illumination) / 0.73, 0, 1);
+        const shadow = shadeAmount * shadeAmount * (3 - 2 * shadeAmount) * 0.79;
+        const scatter = (1 - nz) ** 5 * clamp(illumination * 2.4, 0, 1) * 0.34;
+        const edge = clamp((1 - radiusSquared) * size * 0.5, 0, 1);
+        const alpha = shadow + scatter * (1 - shadow);
+        const index = (py * size + px) * 4;
+        // Premix the warm-neutral scattering highlight with the midnight shade.
+        const rimWeight = alpha > 0 ? scatter * (1 - shadow) / alpha : 0;
+        pixels.data[index] = 2 + rimWeight * 197;
+        pixels.data[index + 1] = 4 + rimWeight * 216;
+        pixels.data[index + 2] = 18 + rimWeight * 221;
+        pixels.data[index + 3] = alpha * edge * 255;
+      }
+    }
+    shade.putImageData(pixels, 0, 0);
   }
   return { materials, shading };
 }
@@ -383,12 +402,14 @@ function drawPlanetRing(
   applyParallaxPlaneTilt(context, viewPose, 0.75);
   context.scale(1, clamp(0.34 + pitch * 0.9, 0.2, 0.5));
   for (let ring = 0; ring < 3; ring += 1) {
-    const ringScale = 0.9 + ring * 0.1;
+    // Unequal belts and a dark separation read as granular rings, not three
+    // equally weighted wire ellipses. The near half catches more light.
+    const ringScale = ring === 0 ? 0.9 : ring === 1 ? 1.035 : 1.13;
     const baseAlpha = foreground
       ? renderTheme.planetRing.foregroundAlpha
       : renderTheme.planetRing.backgroundAlpha;
-    context.strokeStyle = rgba(color, baseAlpha * (1 - ring * 0.2));
-    context.lineWidth = Math.max(0.75, radius * (0.035 + ring * 0.014));
+    context.strokeStyle = rgba(color, baseAlpha * (ring === 0 ? 0.63 : ring === 1 ? 0.42 : 0.32));
+    context.lineWidth = Math.max(0.65, radius * (ring === 0 ? 0.105 : ring === 1 ? 0.075 : 0.019));
     context.beginPath();
     context.ellipse(
       0,
@@ -396,7 +417,7 @@ function drawPlanetRing(
       radius * 1.82 * ringScale,
       radius * 1.08 * ringScale,
       0,
-      0,
+      foreground ? 0 : Math.PI,
       foreground ? Math.PI : TAU,
     );
     context.stroke();
@@ -482,8 +503,8 @@ function drawPlanet(
     radius,
   );
   gradient.addColorStop(0, rgba(highlightColor, renderTheme.planetGradient[0]));
-  gradient.addColorStop(0.3, rgba(midColor, renderTheme.planetGradient[1]));
-  gradient.addColorStop(0.8, rgba(shadowColor, renderTheme.planetGradient[2]));
+  gradient.addColorStop(0.43, rgba(midColor, renderTheme.planetGradient[1]));
+  gradient.addColorStop(0.88, rgba(shadowColor, renderTheme.planetGradient[2]));
   gradient.addColorStop(1, rgba([2, 4, 18], renderTheme.planetGradient[3]));
   context.fillStyle = gradient;
   context.beginPath();

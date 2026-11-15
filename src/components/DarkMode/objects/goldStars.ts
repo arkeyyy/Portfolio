@@ -116,29 +116,35 @@ export function drawGoldStars(
     const size = star.size * (0.88 + sparkle * 0.16) * projection.scale;
     const color = mixRgb(deepGold, warmGold, star.depth);
 
-    if (star.depth > 0.76 && sparkle > 0.82) {
-      const arm = size * (1.45 + sparkle * 0.55);
-      const armWidth = Math.max(0.24, size * 0.2);
-      context.fillStyle = rgba(color, alpha * 0.26);
-      context.fillRect(
-        projection.x - arm,
-        projection.y - armWidth * 0.5,
-        arm * 2,
-        armWidth,
-      );
-      context.fillRect(
-        projection.x - armWidth * 0.5,
-        projection.y - arm,
-        armWidth,
-        arm * 2,
-      );
+    // A few luminous foreground seeds catch tapered rays. Let their intensity
+    // follow the existing twinkle continuously instead of switching a cross on.
+    const glint = star.depth > 0.86
+      ? smoothstep(clamp((sparkle - 0.72) / 0.2, 0, 1))
+      : 0;
+    if (glint > 0.01) {
+      const arm = size * 2.15;
+      const waist = size * 0.13;
+      context.fillStyle = rgba(color, alpha * glint * 0.3);
+      context.beginPath();
+      context.moveTo(projection.x, projection.y - arm * 1.18);
+      context.lineTo(projection.x + waist, projection.y - waist);
+      context.lineTo(projection.x + arm, projection.y);
+      context.lineTo(projection.x + waist, projection.y + waist);
+      context.lineTo(projection.x, projection.y + arm * 1.18);
+      context.lineTo(projection.x - waist, projection.y + waist);
+      context.lineTo(projection.x - arm, projection.y);
+      context.lineTo(projection.x - waist, projection.y - waist);
+      context.closePath();
+      context.fill();
     }
 
     const coreSize = Math.max(0.48, size * 0.64);
-    context.fillStyle = rgba(color, alpha * 0.34);
-    context.beginPath();
-    context.arc(projection.x, projection.y, size * 1.24, 0, TAU);
-    context.fill();
+    if (star.depth > 0.5) {
+      context.fillStyle = rgba(color, alpha * 0.22);
+      context.beginPath();
+      context.arc(projection.x, projection.y, size * 0.98, 0, TAU);
+      context.fill();
+    }
     context.fillStyle = rgba(warmWhite, alpha * (0.74 + star.depth * 0.26));
     context.fillRect(
       projection.x - coreSize * 0.5,

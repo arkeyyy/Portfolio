@@ -132,7 +132,8 @@ function createStarClusterSprite(
     const tone = seededRandom(seed + 3.4);
     const paletteIndex = tone < 0.76 ? 0 : tone < 0.87 ? 1 : tone < 0.93 ? 2 : 3;
     const color = palette[paletteIndex];
-    const alpha = 0.34 + seededRandom(seed + 5.2) * 0.48;
+    const magnitude = seededRandom(seed + 5.2);
+    const alpha = 0.22 + magnitude * magnitude * 0.6;
     const shape = seededRandom(seed + 8.6);
     const size = Math.max(physicalPixel, 0.38 + seededRandom(seed + 7.1) * 0.48);
 
@@ -158,9 +159,19 @@ function createStarClusterSprite(
     }
 
     const arm = Math.max(2.2, size * 2.8);
-    context.fillStyle = rgba(color, alpha * 0.24);
-    context.fillRect(x - arm, y - physicalPixel * 0.5, arm * 2, physicalPixel);
-    context.fillRect(x - physicalPixel * 0.5, y - arm, physicalPixel, arm * 2);
+    const waist = physicalPixel * 0.3;
+    context.fillStyle = rgba(color, alpha * 0.3);
+    context.beginPath();
+    context.moveTo(x, y - arm * 1.2);
+    context.lineTo(x + waist, y - waist);
+    context.lineTo(x + arm, y);
+    context.lineTo(x + waist, y + waist);
+    context.lineTo(x, y + arm * 1.2);
+    context.lineTo(x - waist, y + waist);
+    context.lineTo(x - arm, y);
+    context.lineTo(x - waist, y - waist);
+    context.closePath();
+    context.fill();
     context.fillStyle = rgba(color, alpha);
     context.fillRect(x - size * 0.5, y - size * 0.5, size, size);
   }
@@ -422,7 +433,13 @@ export function drawStarClusterHighlights(
           * (0.62 + cluster.depth * 0.38)
           * twinkle
           * surface.alphaScale;
-        drawStar(context, x, y, highlight.size, color, alpha);
+        if (highlight.size > 1.52) {
+          drawStar(context, x, y, highlight.size, color, alpha);
+        } else {
+          const size = Math.max(0.55, highlight.size * 0.66);
+          context.fillStyle = rgba(color, alpha);
+          context.fillRect(x - size * 0.5, y - size * 0.5, size, size);
+        }
       }
     });
   }
