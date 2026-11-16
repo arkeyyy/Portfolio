@@ -3,9 +3,108 @@ import { clamp, seededRandom, smoothstep, TAU } from '../core/math';
 export type NebulaFilamentSprites = {
   distant: HTMLCanvasElement;
   illuminated: HTMLCanvasElement;
+  patches: readonly SmokePatch[];
+  dustPlane: SmokePlane;
+  gasPlane: SmokePlane;
+  lastMotionTime: number;
 };
 
 type GasNoise = { size: number; values: Float32Array };
+type SmokePlane = { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D | null };
+
+type SmokePatch = {
+  x: number;
+  y: number;
+  atlasX: number;
+  atlasY: number;
+  phase: number;
+  rate: number;
+  driftX: number;
+  driftY: number;
+  curl: number;
+};
+
+const TEXTURE_WIDTH = 640;
+const TEXTURE_HEIGHT = 320;
+const PATCH_SIZE = 240;
+const PATCH_STRIDE = 160;
+const PATCH_GUTTER = 2;
+const PATCH_CELL = PATCH_SIZE + PATCH_GUTTER * 2;
+const PATCH_COLUMNS = 4;
+const PATCH_ROWS = 2;
+const FLOW_MARGIN = 64;
+
+function createSmokePlane(): SmokePlane {
+  const canvas = document.createElement('canvas');
+  canvas.width = TEXTURE_WIDTH + FLOW_MARGIN * 2;
+  canvas.height = TEXTURE_HEIGHT + FLOW_MARGIN * 2;
+  return { canvas, context: canvas.getContext('2d') };
+}
+
+function createSmokePatches(): SmokePatch[] {
+  return Array.from({ length: PATCH_COLUMNS * PATCH_ROWS }, (_, index) => {
+    const seed = 61_307 + index * 37.9;
+    return {
+      x: (index % PATCH_COLUMNS + 0.5) * PATCH_STRIDE,
+      y: (Math.floor(index / PATCH_COLUMNS) + 0.5) * PATCH_STRIDE,
+      atlasX: index % PATCH_COLUMNS * PATCH_CELL + PATCH_GUTTER,
+      atlasY: Math.floor(index / PATCH_COLUMNS) * PATCH_CELL + PATCH_GUTTER,
+      phase: seededRandom(seed) * TAU,
+      rate: 0.00013 + seededRandom(seed + 1.7) * 0.00008,
+      driftX: 7 + seededRandom(seed + 3.1) * 6,
+      driftY: 5 + seededRandom(seed + 5.3) * 5,
+      curl: (seededRandom(seed + 7.9) > 0.5 ? 1 : -1)
+        * (0.035 + seededRandom(seed + 9.7) * 0.035),
+    };
+  });
+}
+
+function smokeWeight(position: number, center: number) {
+  return smoothstep(clamp((PATCH_SIZE * 0.5 - Math.abs(position - center)) / 80, 0, 1));
+}
+
+// Bake overlapping, feathered pieces instead of moving the whole nebula as a
+// flat card. Atlas gutters prevent neighbouring pieces bleeding when scaled.
+function bakeSmokeAtlas(context: CanvasRenderingContext2D, patches: readonly SmokePatch[]) {
+  const source = context.getImageData(0, 0, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+  const xWeights = new Float32Array(TEXTURE_WIDTH);
+  const yWeights = new Float32Array(TEXTURE_HEIGHT);
+  for (let x = 0; x < TEXTURE_WIDTH; x += 1) {
+    for (let column = 0; column < PATCH_COLUMNS; column += 1) {
+      xWeights[x] += smokeWeight(x, (column + 0.5) * PATCH_STRIDE);
+    }
+  }
+  for (let y = 0; y < TEXTURE_HEIGHT; y += 1) {
+    for (let row = 0; row < PATCH_ROWS; row += 1) {
+      yWeights[y] += smokeWeight(y, (row + 0.5) * PATCH_STRIDE);
+    }
+  }
+  context.canvas.width = PATCH_COLUMNS * PATCH_CELL;
+  context.canvas.height = PATCH_ROWS * PATCH_CELL;
+  const atlas = context.createImageData(context.canvas.width, context.canvas.height);
+  for (const patch of patches) {
+    for (let y = 0; y < PATCH_SIZE; y += 1) {
+      const sourceY = patch.y - PATCH_SIZE * 0.5 + y;
+      if (sourceY < 0 || sourceY >= TEXTURE_HEIGHT) continue;
+      const weightY = smokeWeight(sourceY, patch.y) / yWeights[sourceY];
+      for (let x = 0; x < PATCH_SIZE; x += 1) {
+        const sourceX = patch.x - PATCH_SIZE * 0.5 + x;
+        if (sourceX < 0 || sourceX >= TEXTURE_WIDTH) continue;
+        const weight = weightY * smokeWeight(sourceX, patch.x) / xWeights[sourceX];
+        if (weight <= 0) continue;
+        const from = (sourceY * TEXTURE_WIDTH + sourceX) * 4;
+        const to = ((patch.atlasY + y) * context.canvas.width + patch.atlasX + x) * 4;
+        atlas.data[to] = source.data[from];
+        atlas.data[to + 1] = source.data[from + 1];
+        atlas.data[to + 2] = source.data[from + 2];
+        // Linear weights reconstruct the original premultiplied color in a
+        // cached additive plane. Scene opacity is applied once, after mixing.
+        atlas.data[to + 3] = source.data[from + 3] * weight;
+      }
+    }
+  }
+  context.putImageData(atlas, 0, 0);
+}
 
 function createGasNoise(size: number, seed: number): GasNoise {
   return {
@@ -42,7 +141,14 @@ export function createNebulaFilamentSprites(): NebulaFilamentSprites {
   distant.height = illuminated.height = 320;
   const dustContext = distant.getContext('2d');
   const gasContext = illuminated.getContext('2d');
-  if (!dustContext || !gasContext) return { distant, illuminated };
+  const patches = createSmokePatches();
+  const sprites: NebulaFilamentSprites = {
+    distant, illuminated, patches,
+    dustPlane: createSmokePlane(),
+    gasPlane: createSmokePlane(),
+    lastMotionTime: Number.NaN,
+  };
+  if (!dustContext || !gasContext) return { ...sprites, patches: [] };
 
   const warp = createGasNoise(7, 48_170);
   const broad = createGasNoise(13, 49_713);
@@ -108,11 +214,54 @@ export function createNebulaFilamentSprites(): NebulaFilamentSprites {
     gasContext.arc(u * 640, v * 320, radius, 0, TAU);
     gasContext.fill();
   }
-  return { distant, illuminated };
+  bakeSmokeAtlas(dustContext, patches);
+  bakeSmokeAtlas(gasContext, patches);
+  return sprites;
 }
 
-// Shares the nebula's depth surface and slow breathing. Dust and emission use
-// one locked transform so lit edges cannot slide away from their dark channels.
+function updateSmokePlanes(
+  sprites: NebulaFilamentSprites,
+  motionTime: number,
+) {
+  if (sprites.lastMotionTime === motionTime) return;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const plane = pass === 0 ? sprites.dustPlane : sprites.gasPlane;
+    const context = plane.context;
+    if (!context) continue;
+    // Only these small, fixed offscreen planes are cleared. Feather weights
+    // add instead of stacking opacity, avoiding overlap seams at every alpha.
+    context.clearRect(0, 0, plane.canvas.width, plane.canvas.height);
+    context.globalCompositeOperation = 'lighter';
+    const sprite = pass === 0 ? sprites.distant : sprites.illuminated;
+    for (const patch of sprites.patches) {
+      const phase = motionTime * patch.rate + patch.phase;
+      const roll = Math.sin(phase) - Math.sin(patch.phase);
+      const rise = Math.cos(phase * 0.79) - Math.cos(patch.phase * 0.79);
+      const eddy = Math.sin(phase * 1.31 + 1.2) - Math.sin(patch.phase * 1.31 + 1.2);
+      const stretch = 1 + roll * 0.035;
+      context.save();
+      context.translate(
+        FLOW_MARGIN + patch.x + roll * patch.driftX,
+        FLOW_MARGIN + patch.y + rise * patch.driftY,
+      );
+      context.rotate(eddy * patch.curl);
+      // Opposing stretch and gentle shear make local curls billow without
+      // inflating the entire cloud or synchronizing into a breathing pulse.
+      context.transform(stretch, eddy * 0.022, rise * 0.018, 1 / stretch, 0, 0);
+      context.drawImage(
+        sprite,
+        patch.atlasX, patch.atlasY, PATCH_SIZE, PATCH_SIZE,
+        -PATCH_SIZE * 0.5, -PATCH_SIZE * 0.5, PATCH_SIZE, PATCH_SIZE,
+      );
+      context.restore();
+    }
+  }
+  sprites.lastMotionTime = motionTime;
+}
+
+// Each pocket rolls and stretches at its own pace. Its dust and emission share
+// exactly the same flow, while neighbouring pockets overlap and mix softly.
+// Analytic scene-time motion needs no simulation state or snapshot additions.
 export function drawNebulaFilaments(
   context: CanvasRenderingContext2D,
   sprites: NebulaFilamentSprites,
@@ -121,12 +270,20 @@ export function drawNebulaFilaments(
   motionTime: number,
   alpha: number,
 ) {
-  const x = -width * 0.5 + Math.sin(motionTime * 0.000017 + 0.7) * 2;
-  const y = -height * 0.5 + Math.cos(motionTime * 0.000014 + 1.2) * 1.5;
+  if (alpha <= 0.001) return;
+  updateSmokePlanes(sprites, motionTime);
+  const scaleX = width / TEXTURE_WIDTH;
+  const scaleY = height / TEXTURE_HEIGHT;
+  const x = -width * 0.5 - FLOW_MARGIN * scaleX;
+  const y = -height * 0.5 - FLOW_MARGIN * scaleY;
+  const planeWidth = sprites.dustPlane.canvas.width * scaleX;
+  const planeHeight = sprites.dustPlane.canvas.height * scaleY;
+  context.save();
   context.globalCompositeOperation = 'source-over';
   context.globalAlpha = alpha * 0.66;
-  context.drawImage(sprites.distant, x, y, width, height);
+  context.drawImage(sprites.dustPlane.canvas, x, y, planeWidth, planeHeight);
   context.globalCompositeOperation = 'screen';
   context.globalAlpha = alpha * 0.96;
-  context.drawImage(sprites.illuminated, x, y, width, height);
+  context.drawImage(sprites.gasPlane.canvas, x, y, planeWidth, planeHeight);
+  context.restore();
 }
